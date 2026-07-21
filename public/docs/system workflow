@@ -1,0 +1,621 @@
+KPM (Kapuletu Project Manager)
+Product Workflow Specification
+This document describes the complete operational workflow of KPM from the moment an organization joins the platform until software is successfully released.
+
+The Story of KPM
+Imagine a company called Acme Technologies.
+They have just subscribed to KPM.
+They want to build three software products.
+Instead of opening ten different tools...
+they open KPM.
+Everything begins there.
+
+STAGE 1 — Organization Onboarding
+The very first person entering KPM is the Organization Administrator.
+This is usually
+CEO
+CTO
+Engineering Director
+Company Owner
+This user owns the organization.
+
+Step 1
+The Organization Admin signs up.
+They provide
+Company Name
+Organization Logo
+Company Description
+Industry
+Country
+Website
+Timezone
+After verification...
+The Organization Workspace is created.
+KPM
+
+└── Acme Technologies
+
+Step 2
+The Organization Dashboard opens.
+Here they see
+Projects
+
+Project Managers
+
+Teams
+
+Members
+
+Standards
+
+Analytics
+
+Settings
+At this stage
+There are
+no projects
+no members
+no teams
+
+STAGE 2 — Organization Configuration
+Before projects exist...
+The organization defines how it works.
+This becomes reusable across every project.
+The admin configures
+Engineering Standards
+Coding Standards
+Review Standards
+Sprint Standards
+QA Standards
+Meeting Templates
+Project Templates
+Role Templates
+Permissions
+Branch Naming Rules
+Definition of Done
+Working Principles
+Communication Guidelines
+These become organization-wide defaults.
+Every future project inherits them automatically.
+
+STAGE 3 — Project Manager Creation
+The Organization Admin now creates Project Managers.
+Example
+Joseph Kirika
+
+Senior Project Manager
+The PM receives an email.
+You've been invited to KPM.
+
+Organization
+
+Acme Technologies
+
+Role
+
+Project Manager
+They accept.
+Create password.
+Join organization.
+Now their dashboard becomes
+My Projects
+
+Projects I'm Managing
+
+Upcoming Meetings
+
+Sprint Health
+
+Recent Activity
+Notice
+They still cannot see projects.
+Because none exist.
+
+STAGE 4 — Creating a Project
+Now Joseph creates
+Project
+
+Kapuletu Treasury Platform
+He fills
+Project Name
+Description
+Objectives
+Business Goals
+Expected Timeline
+Priority
+Repository
+Swagger
+Documentation
+Figma
+Stakeholders
+Budget
+Uploaded Files
+Project Visibility
+Project Status
+Once saved...
+The project becomes active.
+
+Now the hierarchy becomes
+Organization
+
+    │
+
+    └── Project
+Everything from now on belongs to THIS project.
+Nothing floats independently.
+
+STAGE 5 — Defining the Product
+Before adding people...
+The PM defines
+Product Vision
+Mission
+Success Metrics
+Target Users
+Business Objectives
+Constraints
+Risks
+Scope
+Out of Scope
+Attached Requirements
+Now everyone joining later understands
+"What are we actually building?"
+
+STAGE 6 — Product Roadmap
+Now the PM defines
+Roadmap
+Example
+Foundation
+
+Authentication
+
+Workspace
+
+Core
+
+Groups
+
+Campaigns
+
+Transactions
+
+Insights
+
+Reports
+
+Analytics
+
+Administration
+
+Settings
+
+Help Center
+These become
+Product Modules.
+
+Hierarchy
+Project
+
+↓
+
+Roadmap
+
+↓
+
+Modules
+
+STAGE 7 — Module Planning
+Now the PM opens
+Authentication
+He defines
+Description
+Objectives
+Dependencies
+Documents
+Requirements
+Acceptance Goals
+Priority
+Timeline
+Owner
+Status
+Module Progress
+Nothing has been built yet.
+This is planning.
+
+STAGE 8 — Feature Planning
+Inside Authentication
+The PM now creates Features.
+Example
+User Login
+
+Password Reset
+
+Invite Members
+
+Role Management
+
+Session Management
+
+MFA
+
+Account Lock
+
+Profile Setup
+Each Feature contains
+Business Value
+Requirements
+Acceptance Criteria
+User Stories
+API Links
+Design Links
+Technical Notes
+Dependencies
+Checklists
+Attachments
+Approvals
+Submissions
+Discussions
+Reviews
+Activity
+Timeline
+Status
+This becomes the heart of KPM.
+Everything revolves around Features.
+
+Hierarchy
+Project
+
+↓
+
+Module
+
+↓
+
+Feature
+
+STAGE 9 — Team Building
+Now the PM builds the team.
+Instead of creating random users...
+They define the engineering structure.
+Example
+Engineering Team
+
+Product Lead
+
+Backend Engineer
+
+Frontend Engineer
+
+UI/UX Designer
+
+DevOps
+
+QA
+For every role
+The PM defines
+Responsibilities
+Expectations
+Review Authority
+Deliverables
+Standards
+Access Permissions
+Default Checklists
+Now roles become meaningful.
+
+STAGE 10 — Inviting Team Members
+The PM clicks
+Invite Member
+Provides
+Email
+Name
+Role
+Title
+Team
+Permissions
+Projects
+Invitation Message
+The member receives
+You have been invited to
+
+Project
+
+Kapuletu
+
+Role
+
+Frontend Engineer
+Accepts.
+Creates account.
+Immediately enters THEIR workspace.
+Not the PM workspace.
+
+STAGE 11 — Personal Workspace
+Every user sees a completely different dashboard.
+Example
+Frontend Engineer
+Good Morning Daniel
+
+Today's Sprint
+
+Sprint 4
+
+Assigned Features
+
+Groups Module
+
+Campaign Dashboard
+
+Pending Reviews
+
+2
+
+Today's Tasks
+
+5
+
+Blockers
+
+1
+
+Upcoming Meetings
+
+Monday Planning
+
+Pending Daily Update
+
+Not Submitted
+He never has to wonder
+"What should I do today?"
+The dashboard answers that.
+
+Designer sees
+Design Reviews
+
+Pending Screens
+
+Prototype Requests
+
+Figma Links
+
+Approval Requests
+
+Design Standards
+
+Upcoming Review Meetings
+
+Backend
+API Reviews
+
+Pending PR Reviews
+
+Assigned Features
+
+Swagger
+
+Infrastructure Alerts
+
+Deployment Status
+
+GitHub
+Everything is personalized.
+
+STAGE 12 — Sprint Planning
+The PM creates
+Sprint
+Sprint Goal
+Duration
+Capacity
+Deliverables
+Modules Included
+Features Included
+Meeting Schedule
+Risks
+Dependencies
+Definition of Success
+The Sprint Board is automatically generated.
+
+Now every Feature enters the Sprint.
+
+STAGE 13 — Feature Assignment
+Example
+Feature
+Create Campaign
+Backend
+Joseph
+Frontend
+Daniel
+Design
+Neema
+QA
+Faith
+Everyone works inside ONE feature.
+Not separate tasks.
+This is important.
+
+STAGE 14 — Daily Execution
+Every morning
+Members enter
+"My Workspace"
+They immediately see
+Tasks
+Deliverables
+Meetings
+Reviews
+Pending submissions
+Blocked work
+Due today
+Upcoming deadlines
+
+They work.
+Whenever something is completed
+They don't just tick Done.
+They submit evidence.
+Examples
+GitHub PR
+Figma Link
+API
+Document
+Video
+Screenshot
+Demo
+Commit
+Deployment URL
+The PM reviews
+Approves
+Requests Changes
+Marks Complete
+Everything becomes traceable.
+
+STAGE 15 — Daily Coordination
+At the end of each day
+Members complete
+Daily Update
+Yesterday
+Today
+Blockers
+Risks
+Help Needed
+Manager Comments
+The PM now has a live pulse of the project without asking for updates in chat.
+
+STAGE 16 — Meetings
+Meetings belong to Projects and usually to Sprints.
+The PM creates
+Sprint Planning
+Design Review
+API Review
+Weekly Sync
+Retrospective
+Demo
+For each meeting
+Agenda
+Objective
+Participants
+Time
+Meeting Link
+Documents
+Expected Outcomes
+Action Items
+After the meeting
+Minutes
+Decisions
+Action items
+Owners
+Deadlines
+are attached to the meeting and linked to the relevant sprint, features, or modules.
+
+STAGE 17 — Reviews
+Before a Feature progresses
+Required reviews occur.
+Examples
+Design Review
+Architecture Review
+API Review
+Code Review
+QA Review
+PM Review
+Each review can
+Approve
+Reject
+Request Changes
+Add comments
+Assign follow-up actions
+Nothing advances without the required approvals defined for that feature.
+
+STAGE 18 — Feature Completion
+Once all approvals are complete
+The Feature moves
+Idea
+
+↓
+
+Requirements
+
+↓
+
+Design
+
+↓
+
+Development
+
+↓
+
+Integration
+
+↓
+
+Testing
+
+↓
+
+Approval
+
+↓
+
+Released
+Its history remains permanently attached to the project.
+
+STAGE 19 — Sprint Review
+At the end of the sprint
+KPM automatically prepares
+Completed features
+Outstanding work
+Missed deliverables
+Blockers encountered
+Sprint metrics
+Velocity
+Team workload
+Pending approvals
+The PM conducts the sprint review using live project data instead of manually collecting updates.
+
+STAGE 20 — Sprint Retrospective
+The team records
+What went well
+What didn't go well
+Lessons learned
+Process improvements
+Action items
+These become part of the project's engineering knowledge.
+
+STAGE 21 — Release
+When the planned features for a release are complete
+The PM creates a Release.
+The release includes
+Included features
+Version number
+Release notes
+Deployment checklist
+Required approvals
+Rollback plan
+Production links
+After deployment, the release is marked as completed and linked back to every feature it contains.
+
+STAGE 22 — Project Evolution
+The project does not end after one release.
+New modules
+↓
+New features
+↓
+New sprints
+↓
+New releases
+are continuously created while preserving the complete history of decisions, meetings, reviews, code references, documentation, and outcomes.
+
+The Core Design Philosophy
+I would make one principle non-negotiable because it solves the coordination problems you originally described:
+Everything in KPM is contextual and traceable.
+A feature is never just a card on a board. It is the center of collaboration. From a single feature, a team member or manager should be able to access:
+The business requirements.
+Related product module and roadmap milestone.
+Assigned team members and responsibilities.
+Design files (e.g., Figma).
+API specifications and documentation.
+GitHub repository, branches, commits, and pull requests.
+Sprint assignment and progress.
+Daily updates related to the feature.
+Meetings where it was discussed.
+Decisions and action items.
+Review history and approvals.
+QA results and bugs.
+Deployment status and release version.
+

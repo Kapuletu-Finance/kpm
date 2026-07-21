@@ -1,0 +1,426 @@
+KPM Domain Model
+Overview
+The KPM domain is centered around one idea:
+Everything belongs to a Project.
+Inside a project, work flows naturally from planning to release.
+The hierarchy is simple.
+Organization
+    │
+    ├── Members
+    │
+    └── Projects
+            │
+            ├── Team
+            ├── Roadmap
+            ├── Sprints
+            ├── Meetings
+            ├── Documents
+            └── Modules
+                    │
+                    └── Features
+                            │
+                            ├── Deliverables
+                            ├── Daily Updates
+                            ├── Reviews
+                            └── Comments
+Everything revolves around these objects.
+
+1. Organization
+The highest level.
+For KPM this is simply:
+Kapuletu Systems
+Contains
+Members
+Projects
+Organization Settings
+Standards
+Relationships
+Organization
+
+├── Members
+
+├── Projects
+
+└── Standards
+
+2. Member
+Represents every person using KPM.
+Examples
+Project Manager
+Backend Developer
+Frontend Developer
+Designer
+QA
+DevOps
+Stores
+Profile
+Position
+Role
+Contact
+Skills
+Status
+A member can belong to multiple projects.
+
+3. Project
+The most important object.
+Everything belongs to a project.
+Contains
+Basic Information
+Name
+Description
+Goal
+Timeline
+Status
+Resources
+GitHub Repository
+Swagger
+Figma
+Documentation
+Cloudinary Folder
+Relationships
+Project
+
+├── Team
+
+├── Modules
+
+├── Sprints
+
+├── Meetings
+
+├── Documents
+
+└── Activity
+
+4. Team
+Defines who is working on the project.
+Contains
+Members
+Responsibilities
+Roles
+Examples
+Product Lead
+
+Backend
+
+Frontend
+
+UI/UX
+
+QA
+
+DevOps
+The PM assigns members here.
+
+5. Module
+A major section of the product.
+Examples
+Authentication
+Workspace
+Groups
+Campaigns
+Transactions
+Reports
+Settings
+Each Module contains Features.
+
+Relationship
+Project
+
+↓
+
+Module
+
+↓
+
+Features
+
+6. Feature
+This is the heart of KPM.
+Every feature has
+Name
+Description
+Requirements
+Acceptance Criteria
+Priority
+Status
+Assigned Team
+Due Date
+Resources
+Design Link
+GitHub Branch
+API Notes
+Attachments
+Progress
+Checklist
+Reviews
+Deliverables
+Comments
+Workflow
+Idea
+
+↓
+
+Planning
+
+↓
+
+Design
+
+↓
+
+Development
+
+↓
+
+Review
+
+↓
+
+Testing
+
+↓
+
+Done
+
+7. Sprint
+Groups work into execution periods.
+Contains
+Sprint Name
+Goal
+Duration
+Start Date
+End Date
+Features Included
+Team
+Meetings
+Sprint Status
+Every Feature belongs to one Sprint (or stays in the backlog until assigned).
+
+8. Deliverable
+Represents work submitted by a team member.
+Examples
+GitHub PR
+Figma Design
+API Documentation
+Demo Link
+Deployment URL
+PDF
+Screenshot
+Contains
+Description
+Submission Link
+Files
+Submitted By
+Status
+PM Review
+Comments
+
+9. Daily Update
+Simple.
+Every member fills
+Yesterday
+Today
+Blockers
+Optional Notes
+Manager can respond.
+That's all.
+No unnecessary complexity.
+
+10. Meeting
+Every meeting belongs to a Project.
+Optionally belongs to a Sprint.
+Contains
+Title
+Agenda
+Meeting Link
+Time
+Participants
+Notes
+Action Items
+Attachments
+
+11. Document
+Stores important project knowledge.
+Examples
+Requirements
+Architecture
+Research
+Meeting Minutes
+Specifications
+Contracts
+Resources
+Supports
+Uploads
+Markdown
+Links
+Version updates
+
+12. Review
+A lightweight review system.
+Can review
+Feature
+Deliverable
+Document
+Design
+Review Types
+Approve
+Request Changes
+Reject
+Contains
+Reviewer
+Comments
+Decision
+Date
+
+13. Comment
+Simple discussion.
+Can belong to
+Project
+Module
+Feature
+Deliverable
+Meeting
+Supports
+Replies
+Mentions
+Attachments
+
+14. Activity Log
+Automatic.
+Tracks
+Feature Created
+Member Joined
+Sprint Started
+Review Approved
+Meeting Created
+Document Uploaded
+No manual input.
+Just history.
+
+Relationships
+Organization
+
+├── Members
+
+├── Projects
+
+│       │
+
+│       ├── Team
+
+│       │
+
+│       ├── Modules
+
+│       │       │
+
+│       │       └── Features
+
+│       │               │
+
+│       │               ├── Deliverables
+
+│       │               ├── Reviews
+
+│       │               ├── Comments
+
+│       │               └── Activity
+
+│       │
+
+│       ├── Sprints
+
+│       │
+
+│       ├── Meetings
+
+│       │
+
+│       ├── Documents
+
+│       │
+
+│       └── Activity Log
+
+│
+
+└── Standards
+
+Feature Lifecycle
+Every feature follows the same path.
+Backlog
+
+↓
+
+Sprint
+
+↓
+
+Planning
+
+↓
+
+Design
+
+↓
+
+Development
+
+↓
+
+Review
+
+↓
+
+Testing
+
+↓
+
+Done
+No shortcuts.
+
+Team Member Workflow
+Every member logs in and lands in My Workspace.
+Their dashboard answers:
+"What should I work on today?"
+They can see:
+My assigned features
+My sprint
+My deliverables
+My meetings
+My daily update
+My pending reviews
+Recent activity
+Nothing more.
+They don't need to navigate through the whole system.
+
+Project Manager Workflow
+The Project Manager sees the complete picture.
+They can:
+Create projects
+Build the roadmap
+Create modules
+Create features
+Create sprints
+Assign team members
+Schedule meetings
+Review deliverables
+Approve completed work
+Monitor blockers
+Track project progress
+They are managing outcomes rather than chasing updates.
+
+
+This will be cnanged migrating  "Tasks" as a first-class object.
+To , make the Feature the unit of work.
+Within a feature, include a simple checklist such as:
+Feature: Campaign List
+
+☐ Requirements reviewed
+☑ UI Design completed
+☑ Backend API completed
+☐ Frontend implementation
+☐ Testing
+☐ PM approval
+

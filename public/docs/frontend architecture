@@ -1,0 +1,577 @@
+KPM Frontend Architecture & Modules Document
+Version: 1.0
+Framework: Next.js 15 (App Router)
+Styling: Tailwind CSS v4
+UI Library: shadcn/ui
+State Management: TanStack Query + React Context (minimal local state)
+Backend: Supabase + REST API
+
+1. Frontend Design Principles
+KPM follows these principles throughout the application:
+Workspace First
+Users should never feel lost.
+The interface should always answer:
+Where am I?
+What should I do next?
+
+Everything is Contextual
+If a user opens a Feature,
+they should never have to navigate somewhere else to understand it.
+Everything should be accessible from that page.
+
+Minimal Navigation
+Users should not click through ten screens.
+Maximum depth
+Dashboard
+
+↓
+
+Project
+
+↓
+
+Module
+
+↓
+
+Feature
+That's enough.
+
+Clean Information Density
+Avoid dashboards filled with random cards.
+Every card should answer a question.
+
+2. Global Application Structure
+Authentication
+
+↓
+
+Organization
+
+↓
+
+Projects
+
+↓
+
+Project Workspace
+
+↓
+
+Engineering Modules
+
+3. Application Layout
+┌───────────────────────────────────────────────────────────┐
+│ Top Navigation                                            │
+├───────────────┬───────────────────────────────────────────┤
+│ Sidebar       │                                           │
+│               │                                           │
+│               │ Main Content                              │
+│               │                                           │
+│               │                                           │
+│               │                                           │
+├───────────────┴───────────────────────────────────────────┤
+│ Status Bar / Notifications                               │
+└───────────────────────────────────────────────────────────┘
+
+4. Top Navigation
+Always visible.
+Contains
+Organization
+Current Project
+Search
+Notifications
+User Menu
+
+5. Sidebar Navigation
+Changes depending on role.
+
+Organization Admin
+Dashboard
+
+Projects
+
+Project Managers
+
+Members
+
+Standards
+
+Reports
+
+Settings
+
+Project Manager
+Overview
+
+Roadmap
+
+Modules
+
+Features
+
+Sprint
+
+Meetings
+
+Team
+
+Documents
+
+Releases
+
+Activity
+
+Settings
+
+Team Member
+My Workspace
+
+My Features
+
+Sprint
+
+Meetings
+
+Documents
+
+Daily Updates
+
+Notifications
+
+Profile
+
+6. Project Workspace
+Every project shares the same layout.
+Project
+
+│
+
+├── Overview
+
+├── Roadmap
+
+├── Modules
+
+├── Sprint
+
+├── Meetings
+
+├── Team
+
+├── Documents
+
+├── Releases
+
+├── Activity
+
+└── Settings
+
+MODULE 1 — Authentication
+Pages
+Login
+
+Forgot Password
+
+Reset Password
+
+Profile Setup
+Features
+Authentication
+Session Management
+Profile Completion
+
+MODULE 2 — Organization
+Purpose
+Manage Kapuletu as the organization.
+Pages
+Dashboard
+
+Members
+
+Project Managers
+
+Standards
+
+Reports
+
+Settings
+Capabilities
+Create PM
+View Projects
+Organization Metrics
+Manage Standards
+
+MODULE 3 — Projects
+Purpose
+Manage software projects.
+Pages
+Project List
+
+Create Project
+
+Project Overview
+
+Project Settings
+Project Overview contains
+Description
+Objectives
+Timeline
+Links
+Progress
+Team Summary
+
+MODULE 4 — Roadmap
+Purpose
+Plan the product.
+Pages
+Roadmap
+
+Roadmap Board
+Capabilities
+Create roadmap sections
+Reorder
+Progress visualization
+
+MODULE 5 — Modules
+Purpose
+Break product into functional areas.
+Pages
+Modules List
+
+Module Details
+Each Module shows
+Objectives
+Progress
+Features
+Assigned Members
+Documents
+
+MODULE 6 — Features
+The most important module.
+Pages
+Feature Board
+
+Feature Details
+
+Create Feature
+Feature Details
+Sections
+Overview
+
+Requirements
+
+Acceptance Criteria
+
+Checklist
+
+Deliverables
+
+Reviews
+
+Comments
+
+Activity
+Actions
+Assign Members
+Change Status
+Upload Files
+Submit Deliverables
+
+MODULE 7 — Sprint
+Pages
+Sprint Dashboard
+
+Sprint Board
+
+Sprint Planning
+
+Sprint Review
+
+Retrospective
+Contains
+Sprint Goal
+Sprint Progress
+Assigned Features
+Capacity
+Burndown (optional)
+Metrics
+
+MODULE 8 — Meetings
+Pages
+Meeting List
+
+Meeting Details
+
+Create Meeting
+Meeting Page
+Contains
+Agenda
+Participants
+Meeting Link
+Notes
+Decisions
+Action Items
+
+MODULE 9 — Team
+Pages
+Team Members
+
+Member Profile
+
+Invite Member
+Member Profile
+Shows
+Assigned Features
+Sprint Work
+Deliverables
+Reviews
+Activity
+
+MODULE 10 — Daily Coordination
+Pages
+Daily Updates
+
+Submit Update
+Each Update
+Yesterday
+Today
+Blockers
+Notes
+Manager Feedback
+
+MODULE 11 — Deliverables
+Pages
+Deliverables
+
+Submission Details
+Types
+GitHub PR
+Figma
+Documentation
+Screenshot
+Deployment
+Demo
+
+MODULE 12 — Reviews
+Pages
+Pending Reviews
+
+Review Details
+Actions
+Approve
+Request Changes
+Reject
+
+MODULE 13 — Documents
+Pages
+Document Library
+
+Document Details
+
+Upload Document
+Categories
+Requirements
+Architecture
+Meeting Notes
+Research
+Reference
+
+MODULE 14 — Releases
+Pages
+Release List
+
+Release Details
+
+Create Release
+Shows
+Version
+Features
+Notes
+Deployment Date
+
+MODULE 15 — Notifications
+Pages
+Notification Center
+Types
+Assignment
+Meeting
+Sprint
+Review
+Reminder
+Approval
+
+MODULE 16 — Activity
+Pages
+Activity Timeline
+Shows
+Everything happening inside the project.
+
+MODULE 17 — Search
+Global search.
+Can search
+Projects
+Modules
+Features
+Members
+Meetings
+Documents
+Releases
+
+MODULE 18 — My Workspace
+This is the default page for every team member.
+It is personalized.
+Layout
+Welcome
+
+Today's Priorities
+
+Assigned Features
+
+Current Sprint
+
+Upcoming Meetings
+
+Pending Deliverables
+
+Pending Reviews
+
+Daily Update
+
+Recent Notifications
+This becomes their home.
+
+Shared UI Components
+Rather than thinking about hundreds of components, build a reusable design system around a small set of high-quality components.
+Navigation
+App Sidebar
+Top Navigation
+Breadcrumbs
+Tabs
+Project Switcher
+Layout
+Page Header
+Section Header
+Content Card
+Empty State
+Loading State
+Error State
+Data Display
+Data Table
+Kanban Board
+Timeline
+Status Badge
+Avatar Group
+Progress Bar
+Statistics Cards
+Forms
+Form Layout
+Text Input
+Textarea
+Select
+Multi Select
+Date Picker
+File Upload
+Rich Text Editor
+Markdown Editor
+Collaboration
+Comment Thread
+Activity Feed
+Mention Picker
+Attachment Viewer
+Engineering Components
+Feature Card
+Module Card
+Sprint Card
+Deliverable Card
+Review Card
+Meeting Card
+Document Card
+Member Card
+Feedback
+Toast
+Confirmation Dialog
+Drawer
+Modal
+Command Palette
+
+Frontend Routing Structure
+/
+
+├── auth
+│   ├── login
+│   ├── forgot-password
+│   └── reset-password
+│
+├── dashboard
+│
+├── organization
+│   ├── members
+│   ├── project-managers
+│   ├── standards
+│   ├── reports
+│   └── settings
+│
+├── projects
+│   ├── new
+│   └── [projectId]
+│       ├── overview
+│       ├── roadmap
+│       ├── modules
+│       │   └── [moduleId]
+│       ├── features
+│       │   └── [featureId]
+│       ├── sprint
+│       ├── meetings
+│       ├── team
+│       ├── documents
+│       ├── releases
+│       ├── activity
+│       └── settings
+│
+├── workspace
+├── notifications
+├── search
+└── profile
+
+Frontend State Strategy
+Keep state simple and predictable.
+Server State (TanStack Query)
+Projects
+Modules
+Features
+Meetings
+Sprints
+Documents
+Team Members
+Notifications
+React Context
+Current Organization
+Current Project
+Current User
+Theme
+Sidebar State
+Local Component State
+Dialogs
+Forms
+Filters
+Sorting
+Temporary UI interactions
+Avoid introducing Redux unless the application genuinely outgrows this approach.
+
+Frontend UX Principles
+Every page should follow the same structure:
+Header – Title, description, primary actions.
+Context Bar – Current project, sprint, or module information.
+Main Content – The core data or workflow.
+Quick Actions – Common actions such as create, assign, upload, or review.
+Activity Panel (where relevant) – Comments, history, and recent updates.
+
+Final Frontend Vision
+KPM should not feel like a generic admin dashboard filled with tables. It should feel like an engineering workspace where planning, collaboration, execution, and delivery happen in one place.
+The experience should revolve around four key screens:
+Project Workspace – The command center for a project.
+Feature Details – The central hub where engineering work happens.
+Sprint Board – The team's execution view.
+My Workspace – A personalized daily workspace that tells each team member exactly what needs their attention.
+

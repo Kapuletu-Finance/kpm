@@ -1,0 +1,382 @@
+KPM REST API Specification
+Version: v1
+Architecture: RESTful API
+Authentication: Supabase JWT Authentication
+Content Type
+application/json
+Base URL
+/api/v1
+
+Authentication
+Every request except login/signup requires
+Authorization: Bearer <JWT_TOKEN>
+
+Response Format
+Success
+{
+    "success": true,
+    "message": "Feature created successfully.",
+    "data": {}
+}
+
+Failure
+{
+    "success": false,
+    "message": "Validation failed.",
+    "errors": {}
+}
+
+MODULE 1 — Authentication
+Authentication
+POST   /auth/signup
+POST   /auth/login
+POST   /auth/logout
+POST   /auth/refresh
+POST   /auth/forgot-password
+POST   /auth/reset-password
+GET    /auth/me
+PATCH  /auth/profile
+PATCH  /auth/change-password
+
+MODULE 2 — Organizations
+GET    /organizations
+
+POST   /organizations
+
+GET    /organizations/{id}
+
+PATCH  /organizations/{id}
+
+DELETE /organizations/{id}
+
+Organization Members
+GET    /organizations/{id}/members
+
+POST   /organizations/{id}/members
+
+PATCH  /organizations/{id}/members/{memberId}
+
+DELETE /organizations/{id}/members/{memberId}
+
+Organization Standards
+GET    /organizations/{id}/standards
+
+PATCH  /organizations/{id}/standards
+
+MODULE 3 — Projects
+Create Project
+POST /projects
+List Projects
+GET /projects
+Project Details
+GET /projects/{projectId}
+Update Project
+PATCH /projects/{projectId}
+Archive
+PATCH /projects/{projectId}/archive
+Delete
+DELETE /projects/{projectId}
+
+Project Resources
+PATCH /projects/{projectId}/links
+Contains
+GitHub
+Swagger
+Figma
+Documentation
+Cloudinary
+
+MODULE 4 — Project Team
+Invite Member
+POST /projects/{projectId}/team/invite
+Accept Invitation
+POST /team/invitations/{token}/accept
+Decline
+POST /team/invitations/{token}/decline
+Project Members
+GET /projects/{projectId}/team
+Member Details
+GET /projects/{projectId}/team/{memberId}
+Update Role
+PATCH /projects/{projectId}/team/{memberId}
+Remove Member
+DELETE /projects/{projectId}/team/{memberId}
+
+MODULE 5 — Roadmap
+GET /projects/{projectId}/roadmap
+
+POST /projects/{projectId}/roadmap
+
+PATCH /projects/{projectId}/roadmap
+
+DELETE /projects/{projectId}/roadmap
+
+MODULE 6 — Modules
+Create
+POST /projects/{projectId}/modules
+List
+GET /projects/{projectId}/modules
+Details
+GET /modules/{moduleId}
+Update
+PATCH /modules/{moduleId}
+Delete
+DELETE /modules/{moduleId}
+Reorder
+PATCH /projects/{projectId}/modules/reorder
+
+MODULE 7 — Features
+Create Feature
+POST /modules/{moduleId}/features
+List Features
+GET /modules/{moduleId}/features
+Single Feature
+GET /features/{featureId}
+Update
+PATCH /features/{featureId}
+Delete
+DELETE /features/{featureId}
+Move Feature
+PATCH /features/{featureId}/move
+Duplicate Feature
+POST /features/{featureId}/duplicate
+Feature Timeline
+GET /features/{featureId}/timeline
+
+Assignments
+Assign Member
+POST /features/{featureId}/members
+Remove Member
+DELETE /features/{featureId}/members/{memberId}
+List Assigned Members
+GET /features/{featureId}/members
+
+MODULE 8 — Feature Checklist
+POST /features/{featureId}/checklist
+
+GET /features/{featureId}/checklist
+
+PATCH /checklist/{checklistId}
+
+DELETE /checklist/{checklistId}
+
+MODULE 9 — Sprint Management
+Create Sprint
+POST /projects/{projectId}/sprints
+List
+GET /projects/{projectId}/sprints
+Sprint Details
+GET /sprints/{sprintId}
+Update
+PATCH /sprints/{sprintId}
+Delete
+DELETE /sprints/{sprintId}
+Start Sprint
+POST /sprints/{sprintId}/start
+Close Sprint
+POST /sprints/{sprintId}/close
+Sprint Board
+GET /sprints/{sprintId}/board
+Assign Features
+POST /sprints/{sprintId}/features
+Remove Feature
+DELETE /sprints/{sprintId}/features/{featureId}
+
+MODULE 10 — Daily Updates
+Submit
+POST /projects/{projectId}/daily-updates
+List
+GET /projects/{projectId}/daily-updates
+Member Updates
+GET /members/{memberId}/daily-updates
+Update
+PATCH /daily-updates/{updateId}
+Delete
+DELETE /daily-updates/{updateId}
+
+MODULE 11 — Meetings
+Create
+POST /projects/{projectId}/meetings
+List
+GET /projects/{projectId}/meetings
+Meeting Details
+GET /meetings/{meetingId}
+Update
+PATCH /meetings/{meetingId}
+Delete
+DELETE /meetings/{meetingId}
+Meeting Minutes
+POST /meetings/{meetingId}/minutes
+
+PATCH /meetings/{meetingId}/minutes
+Meeting Action Items
+POST /meetings/{meetingId}/actions
+
+GET /meetings/{meetingId}/actions
+
+PATCH /meeting-actions/{id}
+
+DELETE /meeting-actions/{id}
+
+MODULE 12 — Deliverables
+Submit Deliverable
+POST /features/{featureId}/deliverables
+List
+GET /features/{featureId}/deliverables
+Update
+PATCH /deliverables/{deliverableId}
+Delete
+DELETE /deliverables/{deliverableId}
+
+MODULE 13 — Reviews
+Create Review
+POST /deliverables/{deliverableId}/reviews
+List
+GET /deliverables/{deliverableId}/reviews
+Approve
+POST /reviews/{reviewId}/approve
+Request Changes
+POST /reviews/{reviewId}/changes
+Reject
+POST /reviews/{reviewId}/reject
+
+MODULE 14 — Documents
+Upload
+POST /projects/{projectId}/documents
+List
+GET /projects/{projectId}/documents
+Details
+GET /documents/{documentId}
+Update
+PATCH /documents/{documentId}
+Delete
+DELETE /documents/{documentId}
+
+MODULE 15 — Comments
+Create
+POST /features/{featureId}/comments
+Replies
+POST /comments/{commentId}/reply
+Update
+PATCH /comments/{commentId}
+Delete
+DELETE /comments/{commentId}
+
+MODULE 16 — Releases
+Create
+POST /projects/{projectId}/releases
+List
+GET /projects/{projectId}/releases
+Details
+GET /releases/{releaseId}
+Publish
+POST /releases/{releaseId}/publish
+Update
+PATCH /releases/{releaseId}
+
+MODULE 17 — Notifications
+GET /notifications
+
+PATCH /notifications/{id}/read
+
+PATCH /notifications/read-all
+
+DELETE /notifications/{id}
+
+MODULE 18 — Dashboard
+Project Dashboard
+GET /dashboard/project/{projectId}
+Member Dashboard
+GET /dashboard/me
+Organization Dashboard
+GET /dashboard/organization
+
+MODULE 19 — Activity Logs
+Project Activity
+GET /projects/{projectId}/activities
+Feature Activity
+GET /features/{featureId}/activities
+
+MODULE 20 — Search
+Global Search
+GET /search
+Supported filters:
+projects
+modules
+features
+meetings
+documents
+members
+releases
+
+API Permissions Matrix
+Endpoint Group
+Organization Admin
+Project Manager
+Team Member
+Authentication
+✅
+✅
+✅
+Organizations
+✅
+Read
+Read
+Projects
+Read
+Full
+Read (assigned only)
+Team
+Read
+Full
+Read
+Roadmap
+Read
+Full
+Read
+Modules
+Read
+Full
+Read
+Features
+Read
+Full
+Update assigned features
+Sprints
+Read
+Full
+Read
+Meetings
+Read
+Full
+Read & attend
+Daily Updates
+Read
+Read
+Create & edit own
+Deliverables
+Read
+Review
+Submit own
+Reviews
+Read
+Full
+View assigned
+Documents
+Read
+Full
+Upload & view (project)
+Releases
+Read
+Full
+Read
+Notifications
+Own
+Own
+Own
+Dashboard
+Organization
+Project
+Personal
+
+

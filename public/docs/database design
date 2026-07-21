@@ -1,0 +1,637 @@
+KPM Database Design
+Database Philosophy
+The database is centered around one object:
+Project
+Everything else either belongs directly to a project or indirectly through a feature or sprint.
+The hierarchy becomes:
+Organization
+    │
+    ├── Members
+    │
+    └── Projects
+            │
+            ├── Team Members
+            ├── Modules
+            │      └── Features
+            │              ├── Deliverables
+            │              ├── Reviews
+            │              └── Comments
+            │
+            ├── Sprints
+            ├── Meetings
+            ├── Documents
+            └── Activity Logs
+
+DATABASE TABLES
+
+1. organizations
+Stores organization information.
+id
+
+name
+
+slug
+
+logo_url
+
+description
+
+website
+
+country
+
+timezone
+
+created_at
+
+updated_at
+Relationships
+Organization
+
+↓
+
+Projects
+
+Members
+
+2. members
+Represents every person in KPM.
+Authentication will use Supabase Auth.
+This table stores profile information.
+id
+
+auth_user_id
+
+organization_id
+
+first_name
+
+last_name
+
+email
+
+phone
+
+job_title
+
+avatar
+
+status
+
+created_at
+Status
+Active
+
+Inactive
+
+3. organization_standards
+Stores reusable organization standards.
+Instead of many tables
+Store them as JSON.
+id
+
+organization_id
+
+working_principles
+
+engineering_standards
+
+meeting_templates
+
+definition_of_done
+
+coding_guidelines
+
+created_at
+
+4. projects
+Main project table.
+id
+
+organization_id
+
+project_manager_id
+
+name
+
+description
+
+objective
+
+status
+
+start_date
+
+end_date
+
+github_repository
+
+swagger_url
+
+figma_url
+
+cloudinary_folder
+
+priority
+
+created_at
+
+updated_at
+Status
+Planning
+
+Active
+
+Completed
+
+Archived
+
+5. project_members
+Joins Members to Projects.
+id
+
+project_id
+
+member_id
+
+role
+
+joined_at
+Examples
+Backend Engineer
+
+Frontend Engineer
+
+Designer
+
+QA
+
+DevOps
+
+6. project_documents
+Stores uploaded files.
+id
+
+project_id
+
+title
+
+category
+
+cloudinary_url
+
+description
+
+uploaded_by
+
+created_at
+Category
+Requirements
+
+Architecture
+
+Research
+
+Meeting
+
+Reference
+
+Other
+
+7. modules
+Represents product modules.
+id
+
+project_id
+
+name
+
+description
+
+objective
+
+priority
+
+status
+
+order_index
+
+created_at
+Status
+Not Started
+
+In Progress
+
+Completed
+
+8. features
+Most important table.
+id
+
+module_id
+
+sprint_id
+
+title
+
+description
+
+requirements
+
+acceptance_criteria
+
+priority
+
+status
+
+start_date
+
+due_date
+
+created_at
+Status
+Backlog
+
+Planning
+
+Design
+
+Development
+
+Review
+
+Testing
+
+Done
+
+9. feature_members
+Assigns people to features.
+id
+
+feature_id
+
+member_id
+
+responsibility
+Examples
+Backend
+
+Frontend
+
+Design
+
+QA
+One feature
+↓
+Many members
+
+10. feature_checklists
+Instead of tasks.
+id
+
+feature_id
+
+title
+
+completed
+
+completed_by
+
+completed_at
+
+order_index
+Example
+☑ UI Complete
+
+☑ Backend Complete
+
+☐ Frontend Complete
+
+☐ QA
+
+☐ PM Approval
+
+11. sprints
+id
+
+project_id
+
+name
+
+goal
+
+start_date
+
+end_date
+
+status
+
+created_at
+Status
+Planning
+
+Active
+
+Review
+
+Completed
+
+12. meetings
+id
+
+project_id
+
+sprint_id
+
+title
+
+agenda
+
+description
+
+meeting_link
+
+location
+
+start_time
+
+end_time
+
+created_by
+
+created_at
+
+13. meeting_action_items
+Instead of large meeting system.
+id
+
+meeting_id
+
+description
+
+assigned_to
+
+status
+
+due_date
+
+14. daily_updates
+id
+
+project_id
+
+member_id
+
+sprint_id
+
+yesterday
+
+today
+
+blockers
+
+notes
+
+submitted_at
+
+15. deliverables
+Represents submissions.
+id
+
+feature_id
+
+member_id
+
+title
+
+type
+
+link
+
+description
+
+status
+
+submitted_at
+Type
+GitHub PR
+
+Figma
+
+Document
+
+Deployment
+
+API
+
+Screenshot
+
+Video
+
+16. reviews
+id
+
+deliverable_id
+
+reviewer_id
+
+decision
+
+comments
+
+reviewed_at
+Decision
+Approved
+
+Changes Requested
+
+Rejected
+
+17. comments
+Generic discussion.
+id
+
+feature_id
+
+member_id
+
+comment
+
+parent_comment
+
+created_at
+Supports replies.
+
+18. releases
+id
+
+project_id
+
+version
+
+title
+
+description
+
+release_date
+
+status
+
+notes
+
+19. notifications
+id
+
+member_id
+
+title
+
+message
+
+type
+
+related_type
+
+related_id
+
+read
+
+created_at
+Type
+Meeting
+
+Sprint
+
+Feature
+
+Review
+
+Assignment
+
+Reminder
+
+20. activity_logs
+Automatic history.
+id
+
+project_id
+
+member_id
+
+action
+
+entity
+
+entity_id
+
+description
+
+created_at
+Examples
+Created Feature
+
+Approved Review
+
+Joined Sprint
+
+Uploaded Document
+
+Completed Checklist
+
+Created Meeting
+
+DATABASE RELATIONSHIPS
+organizations
+│
+├── members
+│
+├── organization_standards
+│
+└── projects
+        │
+        ├── project_members
+        │
+        ├── modules
+        │       │
+        │       └── features
+        │               │
+        │               ├── feature_members
+        │               ├── feature_checklists
+        │               ├── deliverables
+        │               │       │
+        │               │       └── reviews
+        │               │
+        │               └── comments
+        │
+        ├── sprints
+        │
+        ├── meetings
+        │       │
+        │       └── meeting_action_items
+        │
+        ├── project_documents
+        │
+        ├── releases
+        │
+        ├── notifications
+        │
+        └── activity_logs
+
+Database Summary
+Table
+Purpose
+organizations
+Organization information
+members
+User profiles
+organization_standards
+Engineering standards
+projects
+Software projects
+project_members
+Project team assignments
+project_documents
+Files and references
+modules
+Product modules
+features
+Engineering features
+feature_members
+Feature assignments
+feature_checklists
+Progress tracking within features
+sprints
+Sprint planning and execution
+meetings
+Scheduled meetings
+meeting_action_items
+Follow-up actions from meetings
+daily_updates
+Daily stand-up updates
+deliverables
+Submitted work for review
+reviews
+Review and approval records
+comments
+Discussions on features
+releases
+Product releases
+notifications
+User notifications
+activity_logs
+Audit trail and project history
+
+
+A Few Improvements I'd Make
+There are three refinements I would make before implementation:
+1. Replace role with project_role
+In project_members, name the field project_role instead of role. This makes it clear that someone can have different roles in different projects (for example, Backend Engineer in one project and Project Manager in another).
+2. Allow deliverables to attach to more than features
+While most deliverables belong to features, some are tied to meetings (e.g., meeting minutes) or projects (e.g., architecture documents). Rather than creating multiple deliverable tables, use a flexible pattern:
+related_type (Feature, Meeting, Project)
+related_id
+This keeps one deliverables table while allowing broader use.
+3. Make feature status configurable
+Instead of hardcoding statuses like Planning, Design, Development, and Testing, consider storing them in a small configuration (or enum managed centrally). That gives you flexibility to adjust the workflow later without changing the database structure.
+Overall, this design stays true to your goal: it
+

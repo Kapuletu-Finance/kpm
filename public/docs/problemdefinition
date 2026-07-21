@@ -1,0 +1,340 @@
+KPM (Kapuletu Project Manager)
+Problem Definition Document
+
+Document Version: 1.0
+
+Project: KPM (Kapuletu Project Manager)
+
+Prepared For: Kapuletu Systems
+
+1. Executive Summary
+
+Modern software development requires continuous coordination between product managers, designers, backend engineers, frontend engineers, QA engineers, DevOps engineers, and management. While many teams possess highly skilled individuals, projects often fail to achieve predictable delivery due to poor coordination rather than lack of technical capability.
+
+Within Kapuletu Systems, the development team has experienced similar operational challenges. Although team members actively contribute to their respective areas, the overall engineering process lacks a structured operational framework that connects planning, execution, collaboration, review, and delivery into one unified workflow.
+
+The result is slower development, reduced visibility, duplicated effort, inconsistent communication, and unnecessary project delays.
+
+KPM (Kapuletu Project Manager) is proposed as an internal engineering management system designed specifically to solve these coordination problems by providing one centralized workspace where projects, teams, features, engineering workflows, meetings, deliverables, reviews, documentation, and sprint execution are managed together.
+
+2. Background
+
+The Kapuletu engineering team currently consists of multiple technical disciplines working simultaneously on the same software products.
+
+Typical project participants include:
+
+Project Manager
+Backend Engineer
+Frontend Engineer
+UI/UX Designer
+DevOps Engineer
+QA Engineer
+Organization Management
+
+The team conducts regular online meetings several times every week to discuss project progress.
+
+Despite these meetings, development has not progressed at the expected pace because coordination largely depends on informal communication and individual initiative rather than an organized engineering process.
+
+The current workflow relies heavily on conversations instead of structured planning and execution.
+
+3. Problem Statement
+
+The current software development process lacks a centralized operational system that manages engineering work from project planning through successful release.
+
+Although team members are productive individually, there is no structured mechanism for coordinating responsibilities, monitoring progress, tracking deliverables, reviewing completed work, managing dependencies, or ensuring accountability across the entire engineering lifecycle.
+
+This results in inconsistent execution, poor visibility, delayed delivery, and avoidable project risks.
+
+4. Current Situation
+
+Currently, software development follows a largely informal process.
+
+The project manager discusses project requirements.
+
+↓
+
+The designer creates screens independently.
+
+↓
+
+The frontend developer waits for completed designs.
+
+↓
+
+The backend developer implements APIs independently.
+
+↓
+
+The team meets periodically to discuss progress.
+
+↓
+
+Work continues until another meeting.
+
+Although this process appears straightforward, many important engineering activities happen outside a structured system.
+
+5. Current Challenges
+5.1 Lack of Clear Ownership
+
+Team members understand their general responsibilities but often lack clearly assigned deliverables.
+
+Questions such as
+
+What exactly should I complete this week?
+Which feature is my responsibility?
+Who is waiting for my work?
+
+are not always immediately answerable.
+
+5.2 Lack of Engineering Visibility
+
+The project manager cannot immediately determine
+
+which features are progressing,
+which features are blocked,
+who is responsible,
+which work has already been completed,
+which work still requires review.
+
+Progress becomes dependent on meetings instead of being continuously visible.
+
+5.3 Poor Coordination Between Disciplines
+
+Each engineering discipline tends to work independently.
+
+For example
+
+Design
+
+↓
+
+Frontend
+
+↓
+
+Backend
+
+operate as separate activities instead of one coordinated engineering process.
+
+Dependencies between teams become difficult to manage.
+
+5.4 Undefined Feature Ownership
+
+Features often exist only as discussion topics.
+
+There is no centralized place where every feature contains
+
+requirements,
+designs,
+API references,
+assigned engineers,
+reviews,
+deliverables,
+completion history.
+
+This makes it difficult for anyone joining the project to understand the current state of work.
+
+5.5 Reactive Rather Than Planned Development
+
+Engineering work frequently becomes reactive.
+
+Instead of following planned milestones,
+
+team members work on whichever area appears most urgent.
+
+This results in
+
+changing priorities,
+duplicated effort,
+incomplete features,
+inconsistent progress.
+5.6 Last-Minute Delivery Pressure
+
+Without structured sprint planning,
+
+work naturally accumulates near meeting dates.
+
+This creates
+
+rushed implementations,
+rushed designs,
+reduced testing,
+unnecessary stress.
+5.7 Limited Accountability
+
+Because work is communicated verbally,
+
+it becomes difficult to determine
+
+who completed what,
+when it was completed,
+whether it was reviewed,
+whether it satisfies project requirements.
+5.8 Scattered Project Information
+
+Important project information exists in multiple places.
+
+Examples include
+
+WhatsApp conversations
+Meeting discussions
+Figma
+Swagger
+GitHub
+Documents
+Personal notes
+
+No single location provides the complete engineering picture.
+
+5.9 No Standardized Engineering Workflow
+
+Features may follow different development processes.
+
+Some begin with design.
+
+Others begin with backend development.
+
+Others begin with frontend implementation.
+
+There is no standardized lifecycle ensuring consistent engineering quality.
+
+5.10 Limited Engineering History
+
+Once work is completed,
+
+it becomes difficult to understand
+
+why decisions were made,
+who approved them,
+what discussions occurred,
+what changes happened over time.
+
+Knowledge is lost.
+
+6. Root Cause Analysis
+
+The primary issue is not technical ability.
+
+The team has capable engineers.
+
+The primary issue is the absence of an operational engineering system that coordinates people, work, communication, reviews, planning, and delivery.
+
+The current process depends heavily on individual communication rather than structured engineering management.
+
+7. Consequences
+
+Without addressing these challenges, future software projects are likely to experience:
+
+Slower delivery
+Increased project delays
+Reduced engineering quality
+Poor visibility
+Communication gaps
+Lost documentation
+Inconsistent planning
+Weak accountability
+Higher management effort
+Increased technical debt
+
+As the team grows, these problems become increasingly difficult to manage.
+
+8. Desired Future State
+
+Kapuletu requires a centralized engineering workspace where every project is planned, executed, reviewed, and delivered through one consistent workflow.
+
+The desired environment should allow every team member to understand
+
+what they are working on,
+why it matters,
+who they are collaborating with,
+what remains to be completed,
+what is currently blocking progress.
+
+Project managers should no longer spend time chasing updates.
+
+Instead,
+
+the system should continuously provide real-time project visibility.
+
+9. Objectives
+
+KPM aims to achieve the following objectives.
+
+Improve Engineering Coordination
+
+Provide one centralized platform for managing all engineering activities.
+
+Standardize Development Workflow
+
+Ensure every feature follows the same engineering lifecycle from planning to release.
+
+Improve Team Accountability
+
+Clearly assign ownership for every feature and deliverable.
+
+Improve Project Visibility
+
+Allow management and project managers to monitor project health continuously.
+
+Improve Planning
+
+Support structured roadmaps, modules, features, and sprint planning.
+
+Improve Collaboration
+
+Enable designers, developers, QA, DevOps, and project managers to collaborate within the same project context.
+
+Improve Documentation
+
+Store engineering knowledge alongside the work it relates to.
+
+Improve Delivery Quality
+
+Ensure every feature passes through review and approval before completion.
+
+10. Scope
+
+KPM will manage the complete internal engineering lifecycle.
+
+Including
+
+Organizations
+Members
+Projects
+Teams
+Product Roadmaps
+Modules
+Features
+Sprint Planning
+Daily Coordination
+Meetings
+Deliverables
+Reviews
+Documentation
+Releases
+Activity History
+
+KPM is not intended to replace GitHub, Figma, or Swagger. Instead, it references and coordinates these tools within the engineering workflow.
+
+11. Success Criteria
+
+The implementation of KPM will be considered successful when:
+
+Every project has a clearly defined roadmap and module structure.
+Every feature has documented requirements, ownership, and acceptance criteria.
+Every team member has a personalized workspace showing their current responsibilities.
+Sprint planning and reviews are conducted using KPM.
+Daily updates and blockers are captured within the platform.
+Meetings, decisions, and action items are recorded centrally.
+Deliverables are submitted and reviewed within KPM.
+Project managers can monitor progress without relying solely on status meetings.
+Engineering knowledge remains accessible throughout the project lifecycle.
+12. Vision Statement
+
+KPM is not intended to become another generic project management application.
+
+Its purpose is to become the operational backbone of software engineering at Kapuletu Systems.
+
+By centralizing planning, collaboration, execution, reviews, documentation, and delivery into one integrated workspace, KPM enables engineering teams to work with greater clarity, accountability, and consistency.
+
+The long-term vision is to establish a repeatable engineering process where every project follows a structured path from idea to successful release, allowing the team to focus less on coordinating work and more on building high-quality software.

@@ -1,0 +1,519 @@
+KPM System Architecture Document
+Version: 1.0
+Document Type: System Architecture Specification
+
+1. Introduction
+Purpose
+This document defines the overall architecture of KPM (Kapuletu Project Manager).
+It explains how the platform is structured, how different parts of the system interact, how users move through the application, and how engineering work flows from project creation to product release.
+Rather than focusing on implementation details, this document defines the logical architecture of the system.
+
+2. Architectural Philosophy
+KPM is designed around one central principle:
+Everything exists within the context of a Project.
+Unlike traditional project management tools where tasks, meetings, files and discussions are scattered across independent modules, KPM treats the Project as the center of the entire engineering process.
+Every object belongs to a project.
+Everything is connected.
+
+3. System Hierarchy
+The complete hierarchy is intentionally simple.
+Organization
+    │
+    ├── Members
+    │
+    └── Projects
+            │
+            ├── Team
+            ├── Roadmap
+            ├── Modules
+            ├── Sprints
+            ├── Meetings
+            ├── Documents
+            ├── Activity
+            └── Releases
+Inside every Module
+Module
+    │
+    └── Features
+            │
+            ├── Deliverables
+            ├── Reviews
+            ├── Daily Updates
+            ├── Comments
+            └── Attachments
+Nothing exists outside this structure.
+
+4. User Hierarchy
+KPM has only four levels of users.
+Level 1 — Platform Administrator
+Responsible for the KPM platform itself.
+Responsibilities
+Manage organizations
+Platform configuration
+Platform security
+Platform maintenance
+
+Level 2 — Organization Administrator
+Represents Kapuletu Management.
+Responsibilities
+Create Project Managers
+Create organization standards
+View all projects
+View reports
+Manage organization members
+
+Level 3 — Project Manager
+Owns one or more projects.
+Responsible for
+Project setup
+Team management
+Product planning
+Sprint planning
+Reviews
+Meetings
+Approvals
+Delivery
+
+Level 4 — Team Member
+Examples
+Backend Engineer
+Frontend Engineer
+UI Designer
+QA
+DevOps
+Their workspace only contains work assigned to them.
+
+5. Navigation Architecture
+Navigation is role-based.
+
+Platform Administrator
+Dashboard
+
+Organizations
+
+Users
+
+Platform Settings
+
+Logs
+
+Organization Administrator
+Dashboard
+
+Projects
+
+Project Managers
+
+Members
+
+Standards
+
+Reports
+
+Settings
+
+Project Manager
+Dashboard
+
+Projects
+
+My Projects
+
+Roadmaps
+
+Sprints
+
+Meetings
+
+Reviews
+
+Analytics
+
+Team Member
+My Workspace
+
+My Features
+
+Sprint
+
+Meetings
+
+Daily Updates
+
+Reviews
+
+Profile
+Notice
+A developer never navigates through organization management.
+The interface stays clean.
+
+6. Project Architecture
+Every project has the same structure.
+Project
+
+Overview
+
+Roadmap
+
+Modules
+
+Features
+
+Sprint
+
+Meetings
+
+Documents
+
+Team
+
+Activity
+
+Settings
+This keeps every project consistent.
+
+7. Project Creation Flow
+Project Manager
+↓
+Create Project
+↓
+Project Information
+↓
+Upload Documents
+↓
+Define Roadmap
+↓
+Create Modules
+↓
+Create Team
+↓
+Invite Members
+↓
+Create Sprint
+↓
+Start Development
+
+8. Roadmap Architecture
+Every roadmap consists of Modules.
+Example
+Roadmap
+
+Foundation
+
+Core Features
+
+Financial Engine
+
+Reporting
+
+Administration
+Each Module belongs to one roadmap.
+
+9. Module Architecture
+A module represents one functional area.
+Example
+Campaigns
+Contains
+Overview
+Description
+Objectives
+Features
+Progress
+Dependencies
+Assigned Members
+Documents
+Timeline
+Activity
+
+10. Feature Architecture
+The Feature is the core working object in KPM.
+Every Feature contains
+Basic Information
+Requirements
+Acceptance Criteria
+Assigned Members
+Priority
+Status
+Deliverables
+Design
+Development Notes
+Reviews
+Comments
+Checklist
+Attachments
+History
+Everything required to complete the feature lives here.
+
+11. Sprint Architecture
+Each Sprint contains
+Sprint Information
+Goal
+Duration
+Members
+Features
+Sprint Board
+Meetings
+Daily Updates
+Sprint Review
+Retrospective
+Metrics
+Nothing else.
+
+12. Daily Coordination Architecture
+Daily coordination belongs to the active sprint.
+Each member submits
+Yesterday
+Today
+Blockers
+Notes
+The PM sees
+Overall Sprint Health
+Blocked Members
+Pending Updates
+Risks
+Completed Work
+
+13. Meeting Architecture
+Meetings belong to Projects.
+Optionally they belong to a Sprint.
+Each Meeting contains
+Agenda
+Description
+Time
+Location / Link
+Participants
+Files
+Minutes
+Action Items
+Decisions
+Attendance
+Meeting History
+
+14. Deliverable Architecture
+Deliverables belong to Features.
+A Deliverable can be
+GitHub Pull Request
+Figma Design
+Deployment Link
+Document
+Screenshot
+Demo
+API Documentation
+Each Deliverable contains
+Title
+Description
+Submission
+Attachments
+Submitted By
+Submitted Date
+Review Status
+Comments
+Approval
+
+15. Review Architecture
+Reviews belong to Deliverables or Features.
+Review Types
+Design Review
+Code Review
+QA Review
+Feature Review
+Review Status
+Pending
+Approved
+Changes Requested
+Rejected
+
+16. Documentation Architecture
+Documentation belongs to Projects.
+Categories
+Requirements
+Specifications
+Architecture
+Meeting Notes
+Research
+Reference
+Uploads
+External Links
+Documents remain searchable.
+
+17. Activity Architecture
+Every important action creates an activity.
+Examples
+Member Joined
+Sprint Started
+Meeting Created
+Feature Assigned
+Review Approved
+Deliverable Submitted
+Project Released
+Activities cannot be edited.
+They provide project history.
+
+18. Notification Architecture
+Notifications are generated automatically.
+Examples
+You've been assigned a feature.
+Sprint starts tomorrow.
+Meeting begins in one hour.
+Review requested.
+Deliverable approved.
+Feature completed.
+Daily update missing.
+Notifications are contextual.
+Clicking one opens the related object.
+
+19. Permission Architecture
+Permissions are role-based.
+Project Manager
+Full control.
+Backend Engineer
+Can only modify assigned features.
+Designer
+Can edit assigned design deliverables.
+QA
+Can create reviews.
+Organization Admin
+Can monitor every project.
+No complicated permission builder is needed for an internal tool.
+
+20. Object Relationships
+Organization
+│
+├── Members
+│
+├── Projects
+│       │
+│       ├── Team
+│       │
+│       ├── Roadmap
+│       │       │
+│       │       └── Modules
+│       │               │
+│       │               └── Features
+│       │                       │
+│       │                       ├── Deliverables
+│       │                       ├── Reviews
+│       │                       ├── Comments
+│       │                       ├── Attachments
+│       │                       └── Activity
+│       │
+│       ├── Sprints
+│       │
+│       ├── Meetings
+│       │
+│       ├── Documents
+│       │
+│       └── Releases
+│
+└── Standards
+
+21. System States
+Project
+Draft
+Planning
+Active
+On Hold
+Completed
+Archived
+
+Sprint
+Planned
+Active
+Review
+Completed
+
+Module
+Not Started
+In Progress
+Completed
+
+Feature
+Backlog
+Planning
+Design
+Development
+Review
+Testing
+Done
+
+Deliverable
+Pending
+Submitted
+Reviewed
+Approved
+Rejected
+
+Review
+Pending
+Approved
+Changes Requested
+Rejected
+
+22. Core Workflows
+Project
+Create → Plan → Team → Execute → Release → Archive
+Sprint
+Plan → Assign → Execute → Review → Retrospective → Close
+Feature
+Plan → Design → Develop → Review → Test → Complete
+Deliverable
+Create → Submit → Review → Approve
+Meeting
+Schedule → Conduct → Record Minutes → Assign Actions → Complete
+
+23. Dashboard Architecture
+Each role lands on a dashboard designed around what they need to act on.
+Organization Dashboard
+Organization health
+Active projects
+Project managers
+Team utilization
+Recent activity
+Project Manager Dashboard
+Project status
+Active sprint
+Upcoming meetings
+Feature progress
+Blockers
+Pending reviews
+Team activity
+Team Member Workspace
+Assigned features
+Current sprint
+Today's priorities
+Pending deliverables
+Meetings
+Daily update
+Recent notifications
+
+24. Integration Architecture
+KPM does not replace specialist tools; it connects to them where appropriate.
+GitHub
+Repository URL
+Branch links
+Pull request links
+Commit references
+Figma
+Design file links
+Prototype links
+Frame references
+Swagger / OpenAPI
+API documentation links
+Cloudinary
+Images
+Documents
+Videos
+Other uploaded assets
+These integrations are lightweight references rather than full synchronizations, keeping the system simple and focused.
+
+25. Architectural Principles
+Every design decision in KPM should follow these principles:
+Projects are the center of the system.
+Features are the primary unit of engineering work.
+Every object has a clear owner.
+Work should be traceable from planning to release.
+The interface should expose only what each role needs.
+Context should never be lost—related information stays linked.
+Integrate with external engineering tools instead of rebuilding them.
+Keep workflows opinionated enough to encourage consistency, but flexible enough to fit different projects.
+
