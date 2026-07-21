@@ -1,0 +1,203 @@
+# KPM Exhaustive Implementation Architecture
+
+This document provides a 1:1 mapping of the `API Specification` and `Frontend Architecture` documents into concrete Next.js file paths. **Nothing will be implemented until this exact structure is approved.**
+
+## User Review Required
+> [!IMPORTANT]
+> This is the exhaustive map of every single file, endpoint, and page we will build. Please review this to ensure no module or endpoint was missed before we proceed to Phase 1.
+
+---
+
+## 1. Exhaustive API Route Handlers (`app/api/v1`)
+
+The backend will be built using Next.js App Router API endpoints, strictly following the REST specification. Each endpoint interfaces with Supabase.
+
+### Module 1: Authentication
+- `POST app/api/v1/auth/signup/route.ts`
+- `POST app/api/v1/auth/login/route.ts`
+- `POST app/api/v1/auth/logout/route.ts`
+- `POST app/api/v1/auth/refresh/route.ts`
+- `POST app/api/v1/auth/forgot-password/route.ts`
+- `POST app/api/v1/auth/reset-password/route.ts`
+- `GET  app/api/v1/auth/me/route.ts`
+- `PATCH app/api/v1/auth/profile/route.ts`
+- `PATCH app/api/v1/auth/change-password/route.ts`
+
+### Module 2: Organizations
+- `GET, POST app/api/v1/organizations/route.ts`
+- `GET, PATCH, DELETE app/api/v1/organizations/[id]/route.ts`
+- `GET, POST app/api/v1/organizations/[id]/members/route.ts`
+- `PATCH, DELETE app/api/v1/organizations/[id]/members/[memberId]/route.ts`
+- `GET, PATCH app/api/v1/organizations/[id]/standards/route.ts`
+
+### Module 3: Projects
+- `GET, POST app/api/v1/projects/route.ts`
+- `GET, PATCH, DELETE app/api/v1/projects/[projectId]/route.ts`
+- `PATCH app/api/v1/projects/[projectId]/archive/route.ts`
+- `PATCH app/api/v1/projects/[projectId]/links/route.ts`
+
+### Module 4: Project Team
+- `POST app/api/v1/projects/[projectId]/team/invite/route.ts`
+- `POST app/api/v1/team/invitations/[token]/accept/route.ts`
+- `POST app/api/v1/team/invitations/[token]/decline/route.ts`
+- `GET app/api/v1/projects/[projectId]/team/route.ts`
+- `GET, PATCH, DELETE app/api/v1/projects/[projectId]/team/[memberId]/route.ts`
+
+### Module 5: Roadmap
+- `GET, POST, PATCH, DELETE app/api/v1/projects/[projectId]/roadmap/route.ts`
+
+### Module 6: Modules
+- `POST, GET app/api/v1/projects/[projectId]/modules/route.ts`
+- `PATCH app/api/v1/projects/[projectId]/modules/reorder/route.ts`
+- `GET, PATCH, DELETE app/api/v1/modules/[moduleId]/route.ts`
+
+### Module 7 & 8: Features & Checklists
+- `POST, GET app/api/v1/modules/[moduleId]/features/route.ts`
+- `GET, PATCH, DELETE app/api/v1/features/[featureId]/route.ts`
+- `PATCH app/api/v1/features/[featureId]/move/route.ts`
+- `POST app/api/v1/features/[featureId]/duplicate/route.ts`
+- `GET app/api/v1/features/[featureId]/timeline/route.ts`
+- `POST, GET app/api/v1/features/[featureId]/members/route.ts`
+- `DELETE app/api/v1/features/[featureId]/members/[memberId]/route.ts`
+- `POST, GET app/api/v1/features/[featureId]/checklist/route.ts`
+- `PATCH, DELETE app/api/v1/checklist/[checklistId]/route.ts`
+
+### Module 9: Sprints
+- `POST, GET app/api/v1/projects/[projectId]/sprints/route.ts`
+- `GET, PATCH, DELETE app/api/v1/sprints/[sprintId]/route.ts`
+- `POST app/api/v1/sprints/[sprintId]/start/route.ts`
+- `POST app/api/v1/sprints/[sprintId]/close/route.ts`
+- `GET app/api/v1/sprints/[sprintId]/board/route.ts`
+- `POST app/api/v1/sprints/[sprintId]/features/route.ts`
+- `DELETE app/api/v1/sprints/[sprintId]/features/[featureId]/route.ts`
+
+### Module 10: Daily Updates
+- `POST, GET app/api/v1/projects/[projectId]/daily-updates/route.ts`
+- `GET app/api/v1/members/[memberId]/daily-updates/route.ts`
+- `PATCH, DELETE app/api/v1/daily-updates/[updateId]/route.ts`
+
+### Module 11: Meetings
+- `POST, GET app/api/v1/projects/[projectId]/meetings/route.ts`
+- `GET, PATCH, DELETE app/api/v1/meetings/[meetingId]/route.ts`
+- `POST, PATCH app/api/v1/meetings/[meetingId]/minutes/route.ts`
+- `POST, GET app/api/v1/meetings/[meetingId]/actions/route.ts`
+- `PATCH, DELETE app/api/v1/meeting-actions/[id]/route.ts`
+
+### Module 12 & 13: Deliverables & Reviews
+- `POST, GET app/api/v1/features/[featureId]/deliverables/route.ts`
+- `PATCH, DELETE app/api/v1/deliverables/[deliverableId]/route.ts`
+- `POST, GET app/api/v1/deliverables/[deliverableId]/reviews/route.ts`
+- `POST app/api/v1/reviews/[reviewId]/approve/route.ts`
+- `POST app/api/v1/reviews/[reviewId]/changes/route.ts`
+- `POST app/api/v1/reviews/[reviewId]/reject/route.ts`
+
+### Module 14, 15, 16, 17, 19, 20: Documents, Comments, Releases, Notifications, Activity, Search
+- `POST, GET app/api/v1/projects/[projectId]/documents/route.ts`
+- `GET, PATCH, DELETE app/api/v1/documents/[documentId]/route.ts`
+- `POST app/api/v1/features/[featureId]/comments/route.ts`
+- `POST app/api/v1/comments/[commentId]/reply/route.ts`
+- `PATCH, DELETE app/api/v1/comments/[commentId]/route.ts`
+- `POST, GET app/api/v1/projects/[projectId]/releases/route.ts`
+- `GET, PATCH app/api/v1/releases/[releaseId]/route.ts`
+- `POST app/api/v1/releases/[releaseId]/publish/route.ts`
+- `GET app/api/v1/notifications/route.ts`
+- `PATCH app/api/v1/notifications/[id]/read/route.ts`
+- `PATCH app/api/v1/notifications/read-all/route.ts`
+- `DELETE app/api/v1/notifications/[id]/route.ts`
+- `GET app/api/v1/projects/[projectId]/activities/route.ts`
+- `GET app/api/v1/features/[featureId]/activities/route.ts`
+- `GET app/api/v1/search/route.ts`
+
+---
+
+## 2. Exhaustive Frontend Page Routing (`app/`)
+
+### Authentication & Profile
+- `app/(auth)/login/page.tsx`
+- `app/(auth)/forgot-password/page.tsx`
+- `app/(auth)/reset-password/page.tsx`
+- `app/(main)/profile/page.tsx`
+- `app/(main)/workspace/page.tsx` (Module 18 - Default Home for Members)
+
+### Organization Admin Panel
+- `app/(main)/organization/dashboard/page.tsx`
+- `app/(main)/organization/members/page.tsx`
+- `app/(main)/organization/project-managers/page.tsx`
+- `app/(main)/organization/standards/page.tsx`
+- `app/(main)/organization/reports/page.tsx`
+- `app/(main)/organization/settings/page.tsx`
+
+### Project Management Shell
+- `app/(main)/projects/page.tsx` (Project List)
+- `app/(main)/projects/new/page.tsx` (Create Project)
+- `app/(main)/projects/[projectId]/layout.tsx` (Project Context Sidebar)
+- `app/(main)/projects/[projectId]/overview/page.tsx`
+- `app/(main)/projects/[projectId]/roadmap/page.tsx`
+- `app/(main)/projects/[projectId]/modules/page.tsx`
+- `app/(main)/projects/[projectId]/modules/[moduleId]/page.tsx`
+- `app/(main)/projects/[projectId]/sprint/page.tsx`
+- `app/(main)/projects/[projectId]/meetings/page.tsx`
+- `app/(main)/projects/[projectId]/team/page.tsx`
+- `app/(main)/projects/[projectId]/documents/page.tsx`
+- `app/(main)/projects/[projectId]/releases/page.tsx`
+- `app/(main)/projects/[projectId]/activity/page.tsx`
+- `app/(main)/projects/[projectId]/settings/page.tsx`
+
+### Feature Hub (Engineering Execution)
+- `app/(main)/projects/[projectId]/features/page.tsx` (Feature Board)
+- `app/(main)/projects/[projectId]/features/[featureId]/page.tsx` (Extensive Feature Details UI containing Checklists, Deliverables, and Comments tabs)
+
+---
+
+## 3. Exhaustive Component Mapping (`components/`)
+
+### Layout & Navigation (`components/layout/`)
+- `AppSidebar.tsx` (Role-based navigation links)
+- `TopNavigation.tsx` (Search bar, Project Switcher, Notifications, Profile Dropdown)
+- `ProjectBreadcrumbs.tsx`
+- `ProjectSwitcher.tsx`
+
+### Shared & Atomic UI (`components/shared/` & `components/ui/`)
+- Shadcn UI Defaults: `Button`, `Input`, `Dialog`, `Popover`, `Select`, `Textarea`, `Tabs`, `Table`, `DropdownMenu`, `Calendar`, `Badge`, `Card`.
+- `StatusBadge.tsx` (Maps string statuses to colors)
+- `AvatarGroup.tsx` (Displays assigned members)
+- `EmptyState.tsx` (Reusable blank slates for lists)
+- `LoadingState.tsx` (Skeleton loaders)
+
+### Domain-Specific Components (`components/domain/`)
+- **Projects**: `ProjectCard.tsx`, `CreateProjectForm.tsx`
+- **Features**: `FeatureCard.tsx`, `FeatureChecklist.tsx`, `AssignMemberModal.tsx`, `KanbanBoard.tsx` (DnD context)
+- **Sprints**: `SprintCard.tsx`, `SprintProgressChart.tsx`, `BurndownChart.tsx`, `StartSprintDialog.tsx`
+- **Deliverables**: `DeliverableUploadForm.tsx`, `ReviewActionDialog.tsx`, `DeliverableList.tsx`
+- **Meetings**: `MeetingCard.tsx`, `AgendaBuilder.tsx`, `ActionItemChecklist.tsx`
+- **Forms**: `RichTextEditor.tsx` (TipTap/Quill), `MarkdownViewer.tsx`, `FileUpload.tsx` (Cloudinary integration)
+- **Collaboration**: `CommentThread.tsx`, `ActivityFeed.tsx`, `NotificationDropdown.tsx`
+
+---
+
+## 4. Execution Flow (Strict Sequence)
+
+We will execute this exhaustive list strictly in the following order:
+
+1. **Phase 1: Shell & Types** 
+   - Generate `database.types.ts`.
+   - Scaffold the complete folder structure above.
+   - Install `shadcn/ui` dependencies.
+2. **Phase 2: Auth & Org API + UI**
+   - Build `Module 1` API and `(auth)` pages.
+   - Build `Module 2` API and `/organization` pages.
+3. **Phase 3: Projects & Planning API + UI**
+   - Build `Module 3, 4, 5` APIs.
+   - Build `/projects/new` and `/roadmap`.
+4. **Phase 4: Features & Engine API + UI**
+   - Build `Module 6, 7, 8` APIs.
+   - Build the `/features/[featureId]` Hub and Kanban boards.
+5. **Phase 5: Agile & Deliverables API + UI**
+   - Build `Module 9, 10, 11, 12` APIs.
+   - Build `/sprints`, `/deliverables`, and Review approval logic.
+6. **Phase 6: Collaboration & Closing**
+   - Build Meetings, Documents, Comments, and Releases APIs + UI.
+
+## Open Questions
+> [!WARNING]
+> This encompasses **every single module and endpoint** from your documentation. Is this 1:1 mapping finally complete enough to proceed to implementation, or are there any specific undocumented endpoints/pages you want added to this list before we execute Phase 1?

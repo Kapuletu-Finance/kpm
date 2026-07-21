@@ -1,0 +1,270 @@
+# KPM Complete Project Scaffold Structure
+
+As requested, before we write a single line of implementation code, we must agree on the complete, professional folder structure. 
+
+This document contains **every single folder and file** that will be scaffolded in the initial phase. Once you approve this structure, I will run the terminal commands to create all of these empty folders and placeholder files.
+
+## User Review Required
+> [!IMPORTANT]
+> Please review this exhaustive file tree. This is exactly what the project directory will look like after the scaffolding phase is complete. If anything is missing, let me know!
+
+---
+
+```text
+kpm/
+├── app/                                    # Next.js App Router root
+│   ├── layout.tsx                          # Root layout (Providers, Fonts)
+│   ├── page.tsx                            # Landing page / Redirect to dashboard
+│   ├── globals.css                         # Tailwind CSS base
+│   │
+│   ├── (auth)/                             # Route Group: Authentication (Public)
+│   │   ├── layout.tsx
+│   │   ├── login/page.tsx
+│   │   ├── signup/page.tsx
+│   │   ├── forgot-password/page.tsx
+│   │   └── reset-password/page.tsx
+│   │
+│   ├── (main)/                             # Route Group: Authenticated (Private)
+│   │   ├── layout.tsx                      # AppSidebar and TopNavigation layout
+│   │   ├── profile/page.tsx
+│   │   ├── workspace/page.tsx              # Member's default home (Module 18)
+│   │   │
+│   │   ├── organization/                   # Org Admin Routes
+│   │   │   ├── dashboard/page.tsx
+│   │   │   ├── members/page.tsx
+│   │   │   ├── project-managers/page.tsx
+│   │   │   ├── standards/page.tsx
+│   │   │   ├── reports/page.tsx
+│   │   │   └── settings/page.tsx
+│   │   │
+│   │   └── projects/                       # Project Routes
+│   │       ├── page.tsx                    # Project List
+│   │       ├── new/page.tsx                # Create Project Form
+│   │       └── [projectId]/                # Dynamic Project Hub
+│   │           ├── layout.tsx              # Project Context Sidebar
+│   │           ├── overview/page.tsx
+│   │           ├── roadmap/page.tsx
+│   │           ├── modules/page.tsx
+│   │           ├── modules/[moduleId]/page.tsx
+│   │           ├── features/page.tsx
+│   │           ├── features/[featureId]/page.tsx
+│   │           ├── sprint/page.tsx
+│   │           ├── meetings/page.tsx
+│   │           ├── team/page.tsx
+│   │           ├── documents/page.tsx
+│   │           ├── releases/page.tsx
+│   │           ├── activity/page.tsx
+│   │           └── settings/page.tsx
+│   │
+│   └── api/                                # Backend REST API Layer
+│       └── v1/
+│           ├── auth/
+│           │   ├── login/route.ts
+│           │   ├── signup/route.ts
+│           │   ├── logout/route.ts
+│           │   ├── refresh/route.ts
+│           │   ├── reset-password/route.ts
+│           │   └── me/route.ts
+│           ├── organizations/
+│           │   ├── route.ts
+│           │   └── [id]/
+│           │       ├── route.ts
+│           │       ├── members/route.ts
+│           │       └── standards/route.ts
+│           ├── projects/
+│           │   ├── route.ts
+│           │   └── [projectId]/
+│           │       ├── route.ts
+│           │       ├── team/route.ts
+│           │       ├── roadmap/route.ts
+│           │       ├── modules/route.ts
+│           │       ├── sprints/route.ts
+│           │       ├── meetings/route.ts
+│           │       ├── daily-updates/route.ts
+│           │       ├── documents/route.ts
+│           │       ├── releases/route.ts
+│           │       └── activities/route.ts
+│           ├── features/
+│           │   └── [featureId]/
+│           │       ├── route.ts
+│           │       ├── members/route.ts
+│           │       ├── checklist/route.ts
+│           │       ├── deliverables/route.ts
+│           │       ├── comments/route.ts
+│           │       └── activities/route.ts
+│           ├── deliverables/
+│           │   └── [deliverableId]/
+│           │       ├── route.ts
+│           │       └── reviews/route.ts
+│           ├── reviews/
+│           │   └── [reviewId]/
+│           │       ├── approve/route.ts
+│           │       ├── changes/route.ts
+│           │       └── reject/route.ts
+│           └── search/
+│               └── route.ts
+│
+├── components/                             # Reusable UI Architecture
+│   ├── ui/                                 # Shadcn primitives
+│   │   ├── button.tsx
+│   │   ├── input.tsx
+│   │   ├── dialog.tsx
+│   │   ├── table.tsx
+│   │   ├── dropdown-menu.tsx
+│   │   ├── tabs.tsx
+│   │   ├── avatar.tsx
+│   │   └── select.tsx
+│   │
+│   ├── layout/                             # Shell components
+│   │   ├── AppSidebar.tsx
+│   │   ├── TopNavigation.tsx
+│   │   ├── ProjectBreadcrumbs.tsx
+│   │   ├── ProjectSwitcher.tsx
+│   │   └── NotificationDropdown.tsx
+│   │
+│   ├── shared/                             # Global reusable logic
+│   │   ├── StatusBadge.tsx
+│   │   ├── EmptyState.tsx
+│   │   ├── ErrorState.tsx
+│   │   ├── LoadingSkeleton.tsx
+│   │   └── AvatarGroup.tsx
+│   │
+│   └── domain/                             # KPM Business Components
+│       ├── workspace/                      # (Module 18 - My Workspace)
+│       │   ├── WelcomeWidget.tsx
+│       │   ├── PriorityList.tsx
+│       │   ├── AssignedFeatures.tsx
+│       │   ├── CurrentSprintWidget.tsx
+│       │   ├── UpcomingMeetings.tsx
+│       │   ├── PendingDeliverables.tsx
+│       │   ├── PendingReviews.tsx
+│       │   ├── DailyUpdatePrompt.tsx
+│       │   └── RecentNotifications.tsx
+│       │
+│       ├── organization/                   # (Module 2)
+│       │   ├── MemberList.tsx
+│       │   ├── InviteMemberModal.tsx
+│       │   ├── ProjectManagerList.tsx
+│       │   ├── StandardEditor.tsx
+│       │   └── OrganizationMetrics.tsx
+│       │
+│       ├── projects/                       # (Module 3)
+│       │   ├── ProjectCard.tsx
+│       │   ├── CreateProjectForm.tsx
+│       │   ├── ProjectOverview.tsx
+│       │   ├── ProjectProgress.tsx
+│       │   ├── TeamSummaryWidget.tsx
+│       │   └── ProjectSettingsForm.tsx
+│       │
+│       ├── roadmap/                        # (Module 4)
+│       │   ├── RoadmapTimeline.tsx
+│       │   ├── RoadmapBoard.tsx
+│       │   └── RoadmapSection.tsx
+│       │
+│       ├── modules/                        # (Module 5)
+│       │   ├── ModuleList.tsx
+│       │   ├── ModuleDetails.tsx
+│       │   └── ModuleProgress.tsx
+│       │
+│       ├── features/                       # (Module 6 & 8)
+│       │   ├── FeatureBoard.tsx
+│       │   ├── FeatureCard.tsx
+│       │   ├── FeatureOverview.tsx
+│       │   ├── RequirementsEditor.tsx
+│       │   ├── AcceptanceCriteriaList.tsx
+│       │   ├── FeatureChecklist.tsx
+│       │   ├── AssignMemberModal.tsx
+│       │   ├── DeliverablesTab.tsx
+│       │   ├── ReviewsTab.tsx
+│       │   └── FeatureTimeline.tsx
+│       │
+│       ├── sprints/                        # (Module 7)
+│       │   ├── SprintDashboard.tsx
+│       │   ├── SprintBoard.tsx             # Kanban implementation
+│       │   ├── SprintPlanningModal.tsx
+│       │   ├── SprintReview.tsx
+│       │   ├── RetrospectiveForm.tsx
+│       │   ├── CapacityWidget.tsx
+│       │   ├── SprintMetrics.tsx
+│       │   └── BurndownChart.tsx
+│       │
+│       ├── daily_updates/                  # (Module 10)
+│       │   ├── DailyUpdateForm.tsx
+│       │   ├── YesterdayTodayBlockers.tsx
+│       │   └── ManagerFeedbackList.tsx
+│       │
+│       ├── deliverables/                   # (Module 11 & 12)
+│       │   ├── DeliverableUploadForm.tsx
+│       │   ├── DeliverableDetails.tsx
+│       │   ├── ReviewActionDialog.tsx
+│       │   └── ReviewStatusBadge.tsx
+│       │
+│       ├── meetings/                       # (Module 8/11)
+│       │   ├── MeetingCard.tsx
+│       │   ├── MeetingList.tsx
+│       │   ├── AgendaBuilder.tsx
+│       │   ├── MeetingMinutesEditor.tsx
+│       │   └── ActionItemChecklist.tsx
+│       │
+│       ├── documents/                      # (Module 13)
+│       │   ├── DocumentLibrary.tsx
+│       │   ├── DocumentCard.tsx
+│       │   ├── UploadDocumentModal.tsx
+│       │   └── CategoryFilter.tsx
+│       │
+│       ├── releases/                       # (Module 14)
+│       │   ├── ReleaseList.tsx
+│       │   ├── ReleaseDetails.tsx
+│       │   ├── CreateReleaseForm.tsx
+│       │   └── DeploymentChecklist.tsx
+│       │
+│       ├── forms/                          # Complex Form Elements
+│       │   ├── RichTextEditor.tsx
+│       │   ├── MarkdownViewer.tsx
+│       │   └── FileUpload.tsx
+│       │
+│       └── collaboration/                  # (Module 15, 16, 17)
+│           ├── CommentThread.tsx
+│           ├── ReplyInput.tsx
+│           ├── ActivityFeed.tsx
+│           ├── ActivityTimelineItem.tsx
+│           └── NotificationDropdown.tsx
+│
+├── lib/                                    # Utilities and Core Integrations
+│   ├── supabase/
+│   │   ├── client.ts
+│   │   ├── server.ts
+│   │   └── middleware.ts                   # Supabase auth protection
+│   ├── cloudinary/
+│   │   └── config.ts
+│   ├── react-query/
+│   │   └── QueryProvider.tsx
+│   ├── types/
+│   │   ├── database.types.ts               # Supabase generated types
+│   │   └── index.ts                        # Shared TypeScript interfaces
+│   └── utils.ts                            # Tailwind cn() merge utilities
+│
+├── hooks/                                  # React Query Data Hooks
+│   ├── useAuth.ts
+│   ├── useOrganizations.ts
+│   ├── useProjects.ts
+│   ├── useFeatures.ts
+│   ├── useSprints.ts
+│   ├── useDeliverables.ts
+│   ├── useMeetings.ts
+│   └── useMembers.ts
+│
+├── services/                               # Fetch/Axios API Callers
+│   ├── auth.service.ts
+│   ├── organization.service.ts
+│   ├── project.service.ts
+│   ├── feature.service.ts
+│   ├── sprint.service.ts
+│   ├── deliverable.service.ts
+│   └── meeting.service.ts
+│
+└── store/                                  # Context State Providers
+    ├── AuthContext.tsx                     # Tracks logged-in user
+    ├── WorkspaceContext.tsx                # Tracks active Project/Org
+    └── SidebarContext.tsx                  # Tracks mobile sidebar state
+```

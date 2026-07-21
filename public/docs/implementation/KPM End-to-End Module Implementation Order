@@ -1,0 +1,97 @@
+# KPM End-to-End Module Implementation Order
+
+As requested, we will build this platform **one module at a time, end-to-end (API + UI)**. We will not start the next module until the current one is fully functional. 
+
+Below is the strict, dependency-driven order of implementation for all 20 modules of the KPM system.
+
+---
+
+### STEP 0: The Skeleton (Prerequisites)
+Before implementing the first module, we will scaffold the bare architecture:
+- Folder structures (`app/`, `components/`, `lib/`).
+- Initialize Supabase Clients and `database.types.ts`.
+- Setup global providers (TanStack Query, Theme).
+- Setup the core UI library (shadcn/ui base).
+
+---
+
+### STEP 1: Identity & Access
+*We cannot build anything until users exist and belong to an organization.*
+1. **Module 1: Authentication**
+   - *End-to-End*: Signup, Login, Password Reset API & Pages.
+2. **Module 2: Organizations**
+   - *End-to-End*: Org Admin dashboard, inviting members, defining organization standards.
+
+---
+
+### STEP 2: Project Foundations
+*We cannot plan features until a project exists.*
+3. **Module 3: Projects**
+   - *End-to-End*: Creating a project, listing projects, project overview dashboard.
+4. **Module 4: Project Team**
+   - *End-to-End*: Assigning organization members to specific projects with specific roles (PM, Member).
+
+---
+
+### STEP 3: Product Planning
+*Building the hierarchical roadmap from top to bottom.*
+5. **Module 5: Roadmap**
+   - *End-to-End*: Defining the high-level phases of the project.
+6. **Module 6: Modules**
+   - *End-to-End*: Breaking the roadmap down into functional areas (e.g., "Auth", "Payments").
+7. **Module 7: Features (The Core)**
+   - *End-to-End*: The central engineering unit. Feature creation, Markdown requirements, assignment.
+8. **Module 8: Feature Checklists**
+   - *End-to-End*: Granular task tracking inside individual features.
+
+---
+
+### STEP 4: Agile Execution
+*Moving from planning to active development.*
+9. **Module 9: Sprint Management**
+   - *End-to-End*: Creating sprints, assigning features to sprints, the drag-and-drop Kanban Sprint Board.
+10. **Module 10: Daily Updates**
+   - *End-to-End*: The daily standup form (Yesterday, Today, Blockers) and manager review view.
+
+---
+
+### STEP 5: Traceability & Quality Control
+*Managing the actual delivery and review of the work.*
+11. **Module 11: Deliverables**
+   - *End-to-End*: Submitting GitHub PRs, Figma links, or deployment URLs against a Feature.
+12. **Module 12: Reviews**
+   - *End-to-End*: The approval workflows (Approve, Request Changes, Reject) for deliverables.
+13. **Module 13: Comments**
+   - *End-to-End*: Discussion threads on Features, Deliverables, and Projects.
+
+---
+
+### STEP 6: Collaboration
+*Centralizing team communication.*
+14. **Module 14: Meetings**
+   - *End-to-End*: Agendas, meeting links, recorded minutes, and action items.
+15. **Module 15: Documents**
+   - *End-to-End*: Uploading and managing architectural docs, contracts, and research (Cloudinary integration).
+
+---
+
+### STEP 7: Closing & Insights
+*Visibility, deployment, and tracking.*
+16. **Module 16: Releases**
+   - *End-to-End*: Grouping completed features into deployable versions, release notes.
+17. **Module 17: Notifications**
+   - *End-to-End*: In-app alerts for assignments, mentions, and review requests.
+18. **Module 18: Activity Logs**
+   - *End-to-End*: The project-wide audit trail timeline.
+19. **Module 19: Dashboard (My Workspace)**
+   - *End-to-End*: The personalized landing page aggregating tasks, meetings, and updates for the logged-in user.
+20. **Module 20: Search**
+   - *End-to-End*: Global search across all entities.
+
+---
+
+## User Approval
+> [!IMPORTANT]
+> This is the exact order we will follow. **We will not start Module 2 until Module 1 is completely finished (API + UI).** 
+> 
+> Does this sequence correctly align with your vision for building the platform end-to-end?
