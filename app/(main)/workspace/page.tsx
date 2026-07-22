@@ -13,6 +13,13 @@ export default function WorkspaceDashboard() {
 
   const [activeTab, setActiveTab] = useState<string | null>(null);
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   // Set the initial tab once role is known, then leave it to user interaction
   useEffect(() => {
     if (role === undefined || activeTab !== null) return;
@@ -32,10 +39,10 @@ export default function WorkspaceDashboard() {
     <div className="space-y-8">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-foreground">
-          Dashboard
+          {getGreeting()}, {memberProfile?.first_name || 'Engineer'}.
         </h2>
         <p className="text-muted-foreground mt-2">
-          Welcome back, {memberProfile?.first_name}. Here is an overview of your workspace.
+          Here is an overview of your workspace today.
         </p>
       </div>
 
@@ -45,7 +52,7 @@ export default function WorkspaceDashboard() {
             <TabsTrigger value="org-overview">Organization Overview</TabsTrigger>
           )}
           {(role === 'Organization Admin' || role === 'Project Manager') && (
-            <TabsTrigger value="portfolio">Project Portfolio</TabsTrigger>
+            <TabsTrigger value="portfolio">My Projects</TabsTrigger>
           )}
           <TabsTrigger value="my-workspace">My Workspace</TabsTrigger>
         </TabsList>

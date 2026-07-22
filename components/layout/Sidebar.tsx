@@ -3,20 +3,19 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Bell, Building2, ChevronLeft, ChevronRight, FolderKanban, LayoutDashboard, MessageSquare, Settings, Users } from 'lucide-react';
+import { Bell, Building2, ChevronLeft, ChevronRight, FolderKanban, Briefcase, MessageSquare, Settings, Users } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/store/AuthContext';
 
 const navItems = [
-  { name: 'Dashboard', href: '/workspace', icon: LayoutDashboard, exact: true },
+  { name: 'My Workspace', href: '/workspace', icon: Briefcase, exact: true },
   { name: 'Organization', href: '/workspace/organization', icon: Building2 },
   { name: 'Projects', href: '/workspace/projects', icon: FolderKanban },
-  { name: 'Collaboration', href: '/workspace/collaboration', icon: MessageSquare },
   { name: 'Notifications', href: '/workspace/notifications', icon: Bell },
 ];
 
-export function SidebarNavContent({ isCollapsed = false }: { isCollapsed?: boolean }) {
+export function SidebarNavContent({ isCollapsed = false, onLinkClick }: { isCollapsed?: boolean, onLinkClick?: () => void }) {
   const pathname = usePathname();
   const { data: notifications } = useNotifications();
   const { memberProfile } = useAuth();
@@ -39,7 +38,7 @@ export function SidebarNavContent({ isCollapsed = false }: { isCollapsed?: boole
     <>
       {/* Logo Area */}
       <div className={`flex items-center h-16 flex-shrink-0 border-b border-white/10 ${isCollapsed ? 'justify-center px-2' : 'px-6'}`}>
-        <Link href="/workspace" className="flex items-center">
+        <Link href="/workspace" className="flex items-center" onClick={onLinkClick}>
           {isCollapsed ? (
             <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center font-bold text-primary-foreground">
               K
@@ -69,6 +68,7 @@ export function SidebarNavContent({ isCollapsed = false }: { isCollapsed?: boole
             <Link
               key={item.name}
               href={item.href}
+              onClick={onLinkClick}
               title={isCollapsed ? item.name : undefined}
               className={`group flex items-center py-2 text-sm font-medium rounded-md transition-colors ${
                 isCollapsed ? 'justify-center px-0' : 'px-3'
@@ -102,6 +102,7 @@ export function SidebarNavContent({ isCollapsed = false }: { isCollapsed?: boole
       <div className={`flex-shrink-0 border-t border-white/10 ${isCollapsed ? 'p-2' : 'p-4'}`}>
         <Link
           href="/workspace/settings"
+          onClick={onLinkClick}
           title={isCollapsed ? 'Settings' : undefined}
           className={`group flex items-center py-2 text-sm font-medium rounded-md text-secondary-foreground/80 hover:bg-white/10 hover:text-white transition-colors ${
             isCollapsed ? 'justify-center px-0' : 'px-3'

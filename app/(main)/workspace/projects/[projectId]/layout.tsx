@@ -6,7 +6,7 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useProject, useUpdateProject } from '@/hooks/useProjects';
 import { useAuth } from '@/store/AuthContext';
-import { Loader2, ArrowLeft, LayoutDashboard, Users, Route, Settings2, Timer, MessageSquare, Video, FolderOpen, Rocket, Activity, Pencil, PauseCircle } from 'lucide-react';
+import { Loader2, ArrowLeft, Map, Users, Route, Settings2, Timer, MessageSquare, Video, FolderOpen, Rocket, Activity, Pencil, PauseCircle } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -78,7 +78,7 @@ export default function ProjectLayout({
   };
 
   const tabs = [
-    { name: 'Overview', href: `/workspace/projects/${project.id}`, icon: LayoutDashboard },
+    { name: 'Overview', href: `/workspace/projects/${project.id}`, icon: Map },
     { name: 'Sprints', href: `/workspace/projects/${project.id}/sprints`, icon: Timer },
     { name: 'Roadmap', href: `/workspace/projects/${project.id}/roadmap`, icon: Route },
     { name: 'Standups', href: `/workspace/projects/${project.id}/standups`, icon: MessageSquare },

@@ -19,10 +19,12 @@ import { useRouter } from 'next/navigation';
 import { Search, Menu } from 'lucide-react';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { toast } from 'sonner';
+import { useState } from 'react';
 
 export function Header() {
   const { user, memberProfile } = useAuth();
   const router = useRouter();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -45,7 +47,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-10 flex h-16 flex-shrink-0 items-center gap-x-4 border-b border-border bg-background px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
       {/* Mobile Menu */}
-      <Sheet>
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetTrigger render={
           <button type="button" className="-m-2.5 p-2.5 text-muted-foreground lg:hidden">
             <span className="sr-only">Open sidebar</span>
@@ -54,7 +56,7 @@ export function Header() {
         } />
         <SheetContent side="left" className="w-64 p-0 bg-secondary text-secondary-foreground border-none">
           <div className="flex flex-col h-full">
-            <SidebarNavContent />
+            <SidebarNavContent onLinkClick={() => setSheetOpen(false)} />
           </div>
         </SheetContent>
       </Sheet>
