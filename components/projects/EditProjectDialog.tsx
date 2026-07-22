@@ -199,6 +199,7 @@ export function EditProjectDialog({ project, open, onOpenChange }: EditProjectDi
     try {
       const payload = {
         ...data,
+        project_manager_id: pmValue,
         // Keep existing value if the field is empty (user didn't change it)
         github_repository: data.github_repository || project.github_repository || '',
         figma_url: data.figma_url || project.figma_url || '',

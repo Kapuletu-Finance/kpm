@@ -5,6 +5,7 @@ import { z } from 'zod';
 const updateProjectSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
+  project_manager_id: z.string().optional(),
   business_goals: z.array(z.string()).optional(),
   target_users: z.array(z.string()).optional(),
   success_metrics: z.array(z.string()).optional(),
@@ -148,6 +149,45 @@ export async function PATCH(
     if (data.business_goals !== undefined) updatePayload.business_goals = data.business_goals ? JSON.stringify(data.business_goals) : null;
     if (data.target_users !== undefined) updatePayload.target_users = data.target_users ? JSON.stringify(data.target_users) : null;
     if (data.success_metrics !== undefined) updatePayload.success_metrics = data.success_metrics ? JSON.stringify(data.success_metrics) : null;
+
+    // Handle Project Manager Reassignment
+    if (data.project_manager_id && data.project_manager_id !== project.project_manager_id) {
+      if (!isOrgAdmin) {
+        return NextResponse.json({ error: 'Only Organization Admins can reassign Project Managers' }, { status: 403 });
+      }
+
+      // Verify the new PM exists and has correct role
+      const { data: pmMember, error: pmError } = await supabase
+        .from('members')
+        .select('id, organization_id, organization_role')
+        .eq('id', data.project_manager_id)
+        .single();
+        
+      if (pmError || !pmMember || pmMember.organization_id !== callerMember.organization_id) {
+        return NextResponse.json({ error: 'Invalid Project Manager' }, { status: 400 });
+      }
+      if (pmMember.organization_role === 'Member') {
+        return NextResponse.json({ error: 'Selected user is not a Project Manager or Admin' }, { status: 400 });
+      }
+
+      updatePayload.project_manager_id = data.project_manager_id;
+      
+      // Upsert new PM into project_members
+      const { error: memberUpsertError } = await supabase
+        .from('project_members')
+        .upsert({
+          project_id: projectId,
+          member_id: data.project_manager_id,
+          project_role: 'Project Manager',
+          review_authority: true
+        }, { onConflict: 'project_id, member_id' });
+        
+      if (memberUpsertError) {
+        console.error('Failed to update project members during reassignment', memberUpsertError);
+      }
+    } else {
+      delete updatePayload.project_manager_id;
+    }
 
     const { data: updatedProject, error: updateError } = await supabase
       .from('projects')
