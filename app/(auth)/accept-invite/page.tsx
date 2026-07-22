@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useResetPasswordMutation } from '@/hooks/useAuth';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,7 +24,6 @@ type AcceptInviteFormValues = z.infer<typeof acceptInviteSchema>;
 
 export default function AcceptInvitePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const resetMutation = useResetPasswordMutation();
   const router = useRouter();
 
   const {
@@ -38,10 +37,20 @@ export default function AcceptInvitePage() {
   const onSubmit = async (data: AcceptInviteFormValues) => {
     setIsSubmitting(true);
     try {
-      await resetMutation.mutateAsync({ password: data.password });
+      const supabase = createClient();
+      
+      // Update password directly on the client to ensure we use the session from the URL hash fragment
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: data.password
+      });
+
+      if (updateError) throw updateError;
       
       // Update member status from 'Invited' to 'Active'
-      await fetch('/api/v1/auth/activate', { method: 'POST' });
+      const activateRes = await fetch('/api/v1/auth/activate', { method: 'POST' });
+      if (!activateRes.ok) {
+        throw new Error('Failed to activate member status');
+      }
       
       toast.success('Account activated successfully');
       window.location.href = '/workspace';
