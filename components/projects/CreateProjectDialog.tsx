@@ -204,8 +204,9 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="project_manager_id">Project Manager</Label>
+        {memberProfile?.organization_role === 'Organization Admin' && (
+          <div className="space-y-2">
+            <Label htmlFor="project_manager_id">Project Manager</Label>
           <Select
             value={pmIdValue}
             onValueChange={(val: any) => setValue('project_manager_id', val)}
@@ -224,8 +225,9 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
             </SelectContent>
           </Select>
         </div>
+        )}
 
-        <div className="space-y-2">
+        <div className={`space-y-2 ${memberProfile?.organization_role !== 'Organization Admin' ? 'col-span-2' : ''}`}>
           <Label htmlFor="priority">Priority</Label>
           <Select value={priorityValue} onValueChange={(val: any) => setValue('priority', val)}>
             <SelectTrigger>

@@ -57,8 +57,11 @@ export async function POST(request: Request) {
     const data = result.data;
     let pmId = user.id; // default to caller
 
-    // If a specific project manager was passed, verify they exist and have rights
-    if (data.project_manager_id) {
+    // If caller is a PM, force assignment to themselves.
+    if (callerMember.organization_role === 'Project Manager') {
+      pmId = user.id;
+    } else if (data.project_manager_id) {
+      // If an Org Admin passes a specific PM, verify they exist and have rights
       const { data: pmMember, error: pmError } = await supabase
         .from('members')
         .select('id, organization_id, organization_role')
