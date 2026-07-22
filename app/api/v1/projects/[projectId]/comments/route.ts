@@ -2,16 +2,11 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
-const meetingSchema = z.object({
-  title: z.string().min(1),
-  sprint_id: z.string().uuid().optional().nullable(),
-  objective: z.string().optional(),
-  agenda: z.string().optional(),
-  type: z.enum(['Online', 'Physical']).default('Online'),
-  meeting_link: z.string().url().optional().or(z.literal('')),
-  location: z.string().optional(),
-  start_time: z.string().datetime(),
-  end_time: z.string().datetime(),
+const commentSchema = z.object({
+  entity_type: z.enum(['Feature', 'Deliverable', 'Meeting', 'Project', 'Module']),
+  entity_id: z.string().uuid(),
+  comment: z.string().min(1),
+  parent_comment_id: z.string().uuid().optional().nullable(),
 });
 
 async function verifyAccess(supabase: any, user: any, projectId: string) {
@@ -51,14 +46,28 @@ export async function GET(
     const { hasAccess } = await verifyAccess(supabase, user, projectId);
     if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+    const { searchParams } = new URL(request.url);
+    const entityType = searchParams.get('entityType');
+    const entityId = searchParams.get('entityId');
+
+    if (!entityType || !entityId) {
+      return NextResponse.json({ error: 'Missing entityType or entityId' }, { status: 400 });
+    }
+
     const { data, error } = await supabase
-      .from('meetings')
+      .from('comments')
       .select(`
         *,
-        members:created_by(id, first_name, last_name, avatar_url)
+        members (
+          id,
+          first_name,
+          last_name,
+          avatar_url
+        )
       `)
-      .eq('project_id', projectId)
-      .order('start_time', { ascending: true });
+      .eq('entity_type', entityType)
+      .eq('entity_id', entityId)
+      .order('created_at', { ascending: true }); // Oldest first for threads
 
     if (error) throw error;
 
@@ -79,46 +88,36 @@ export async function POST(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { hasAccess, role } = await verifyAccess(supabase, user, projectId);
+    const { hasAccess } = await verifyAccess(supabase, user, projectId);
     if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    if (role !== 'Organization Admin' && role !== 'Project Manager') {
-      return NextResponse.json({ error: 'Only Project Managers and Admins can schedule meetings' }, { status: 403 });
-    }
-
     const body = await request.json();
-    const result = meetingSchema.safeParse(body);
+    const result = commentSchema.safeParse(body);
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    const { data: meeting, error: meetingError } = await supabase
-      .from('meetings')
+    const { data: comment, error: commentError } = await supabase
+      .from('comments')
       .insert({
-        project_id: projectId,
-        sprint_id: result.data.sprint_id || null,
-        title: result.data.title,
-        objective: result.data.objective,
-        agenda: result.data.agenda,
-        type: result.data.type,
-        meeting_link: result.data.type === 'Online' ? result.data.meeting_link || null : null,
-        location: result.data.type === 'Physical' ? result.data.location || null : null,
-        start_time: result.data.start_time,
-        end_time: result.data.end_time,
-        created_by: user.id
+        entity_type: result.data.entity_type,
+        entity_id: result.data.entity_id,
+        member_id: user.id,
+        comment: result.data.comment,
+        parent_comment_id: result.data.parent_comment_id || null
       })
-      .select()
+      .select(`
+        *,
+        members (
+          id,
+          first_name,
+          last_name,
+          avatar_url
+        )
+      `)
       .single();
 
-    if (meetingError) throw meetingError;
+    if (commentError) throw commentError;
 
-    // Automatically add the creator as a participant
-    // Since meeting_participants is new, we use a raw query or insert if we can
-    // Ignoring errors if the table isn't created yet in case user hasn't run migration
-    await supabase.from('meeting_participants').insert({
-      meeting_id: meeting.id,
-      member_id: user.id
-    });
-
-    return NextResponse.json(meeting);
+    return NextResponse.json(comment);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

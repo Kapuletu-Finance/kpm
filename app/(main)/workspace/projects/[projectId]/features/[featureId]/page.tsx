@@ -2,6 +2,8 @@
 
 import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { DeliverablesList } from '@/components/projects/DeliverablesList';
+import { CommentsSection } from '@/components/projects/CommentsSection';
 import { useAuth } from '@/store/AuthContext';
 import { useProjectTeam } from '@/hooks/useProjectTeam';
 import { 
@@ -271,6 +273,12 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ proje
               </Button>
             </form>
           </div>
+          
+          {/* Deliverables Section */}
+          <DeliverablesList projectId={projectId} featureId={featureId} canManage={canManage} />
+
+          {/* Comments Section */}
+          <CommentsSection projectId={projectId} entityType="Feature" entityId={featureId} canManage={canManage} />
           
         </div>
 

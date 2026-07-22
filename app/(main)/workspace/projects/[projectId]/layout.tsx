@@ -5,7 +5,7 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useProject } from '@/hooks/useProjects';
 import { useAuth } from '@/store/AuthContext';
-import { Loader2, ArrowLeft, LayoutDashboard, Users, Route, Settings2, Timer, MessageSquare } from 'lucide-react';
+import { Loader2, ArrowLeft, LayoutDashboard, Users, Route, Settings2, Timer, MessageSquare, Video, FolderOpen, Rocket, Activity } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -50,6 +50,10 @@ export default function ProjectLayout({
     { name: 'Sprints', href: `/workspace/projects/${project.id}/sprints`, icon: Timer },
     { name: 'Roadmap', href: `/workspace/projects/${project.id}/roadmap`, icon: Route },
     { name: 'Standups', href: `/workspace/projects/${project.id}/standups`, icon: MessageSquare },
+    { name: 'Meetings', href: `/workspace/projects/${project.id}/meetings`, icon: Video },
+    { name: 'Documents', href: `/workspace/projects/${project.id}/documents`, icon: FolderOpen },
+    { name: 'Releases', href: `/workspace/projects/${project.id}/releases`, icon: Rocket },
+    { name: 'Activity', href: `/workspace/projects/${project.id}/activity`, icon: Activity },
     { name: 'Team', href: `/workspace/projects/${project.id}/team`, icon: Users },
   ];
 

@@ -11,18 +11,23 @@ import {
   IterationCcw, 
   CheckSquare, 
   MessageSquare,
-  Settings
+  Settings,
+  Bell
 } from 'lucide-react';
+import { useNotifications } from '@/hooks/useNotifications';
 
 const navItems = [
   { name: 'Dashboard', href: '/workspace', icon: LayoutDashboard, exact: true },
   { name: 'Organization', href: '/workspace/organization', icon: Building2 },
   { name: 'Projects', href: '/workspace/projects', icon: FolderKanban },
   { name: 'Collaboration', href: '/workspace/collaboration', icon: MessageSquare },
+  { name: 'Notifications', href: '/workspace/notifications', icon: Bell },
 ];
 
 export function SidebarNavContent() {
   const pathname = usePathname();
+  const { data: notifications } = useNotifications();
+  const unreadCount = notifications?.filter(n => !n.is_read).length || 0;
 
   return (
     <>
@@ -65,6 +70,11 @@ export function SidebarNavContent() {
                 aria-hidden="true" 
               />
               {item.name}
+              {item.name === 'Notifications' && unreadCount > 0 && (
+                <span className="ml-auto inline-block py-0.5 px-2 text-xs font-semibold rounded-full bg-accent text-accent-foreground">
+                  {unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}

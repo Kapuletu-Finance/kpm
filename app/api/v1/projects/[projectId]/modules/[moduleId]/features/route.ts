@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { logActivity } from '@/lib/activity.server';
 import { z } from 'zod';
 
 const createFeatureSchema = z.object({
@@ -136,6 +137,17 @@ export async function POST(
       .single();
 
     if (createError) return NextResponse.json({ error: createError.message }, { status: 400 });
+
+    // Log the activity
+    await logActivity({
+      supabase,
+      projectId,
+      memberId: user.id,
+      action: 'Created',
+      entityType: 'Feature',
+      entityId: feature.id,
+      description: `Created a new feature: ${feature.title}`
+    });
 
     return NextResponse.json(feature);
   } catch (error: any) {

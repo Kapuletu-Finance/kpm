@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
+import { createNotification } from '@/lib/notifications.server';
+import { logActivity } from '@/lib/activity.server';
 
 const assignMemberSchema = z.object({
   member_id: z.string().uuid("Invalid member ID"),
@@ -107,9 +109,31 @@ export async function POST(
       `)
       .single();
 
-    if (createError) return NextResponse.json({ error: createError.message }, { status: 400 });
+    if (createError) return NextResponse.json({ error: createError.message }, { status: 500 });
 
-    return NextResponse.json(assignment);
+    // 🚀 Inject Notification
+    const { data: feature } = await supabase.from('features').select('title').eq('id', featureId).single();
+    await createNotification({
+      member_id: result.data.member_id,
+      title: `You have been assigned to a feature`,
+      message: `You were assigned as ${result.data.responsibility || 'a member'} to feature: ${feature?.title || 'Unknown'}`,
+      type: 'Assignment',
+      entity_type: 'Feature',
+      entity_id: featureId
+    });
+
+    // Log the activity
+    await logActivity({
+      supabase,
+      projectId,
+      memberId: user.id,
+      action: 'Assigned',
+      entityType: 'Feature',
+      entityId: featureId,
+      description: `Assigned a member to feature: ${feature?.title || 'Unknown'}`
+    });
+
+    return NextResponse.json(assignment, { status: 201 });
   } catch (error: any) {
     console.error('Assign feature member error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

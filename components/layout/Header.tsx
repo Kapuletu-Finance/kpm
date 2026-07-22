@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
 import { SidebarNavContent } from '@/components/layout/Sidebar';
+import { NotificationsPopover } from '@/components/layout/NotificationsPopover';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
 import { Search, Menu } from 'lucide-react';
@@ -79,6 +80,8 @@ export function Header() {
         </form>
         <div className="flex items-center gap-x-4 lg:gap-x-6">
           
+          <NotificationsPopover />
+
           <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-border" aria-hidden="true" />
 
           {/* Profile dropdown */}

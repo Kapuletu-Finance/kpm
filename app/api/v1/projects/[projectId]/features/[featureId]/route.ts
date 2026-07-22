@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { logActivity } from '@/lib/activity.server';
 import { z } from 'zod';
 
 const updateFeatureSchema = z.object({
@@ -142,6 +143,17 @@ export async function PATCH(
 
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
 
+    // Log the activity
+    await logActivity({
+      supabase,
+      projectId,
+      memberId: user.id,
+      action: 'Updated',
+      entityType: 'Feature',
+      entityId: featureId,
+      description: `Updated feature: ${feature.title}`
+    });
+
     return NextResponse.json(feature);
   } catch (error: any) {
     console.error('Update feature error:', error);
@@ -176,6 +188,17 @@ export async function DELETE(
       .eq('id', featureId);
 
     if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 400 });
+
+    // Log the activity
+    await logActivity({
+      supabase,
+      projectId,
+      memberId: user.id,
+      action: 'Deleted',
+      entityType: 'Feature',
+      entityId: featureId,
+      description: `Deleted a feature`
+    });
 
     return NextResponse.json({ message: 'Feature deleted successfully' });
   } catch (error: any) {

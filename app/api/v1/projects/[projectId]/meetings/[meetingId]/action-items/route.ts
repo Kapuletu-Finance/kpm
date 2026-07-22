@@ -2,16 +2,11 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
-const meetingSchema = z.object({
-  title: z.string().min(1),
-  sprint_id: z.string().uuid().optional().nullable(),
-  objective: z.string().optional(),
-  agenda: z.string().optional(),
-  type: z.enum(['Online', 'Physical']).default('Online'),
-  meeting_link: z.string().url().optional().or(z.literal('')),
-  location: z.string().optional(),
-  start_time: z.string().datetime(),
-  end_time: z.string().datetime(),
+const actionItemSchema = z.object({
+  description: z.string().min(1),
+  assigned_to: z.string().uuid().optional().nullable(),
+  status: z.enum(['Pending', 'In Progress', 'Completed']).default('Pending'),
+  due_date: z.string().optional().nullable(),
 });
 
 async function verifyAccess(supabase: any, user: any, projectId: string) {
@@ -39,11 +34,11 @@ async function verifyAccess(supabase: any, user: any, projectId: string) {
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: Promise<{ projectId: string, meetingId: string }> }
 ) {
   try {
     const supabase = await createClient();
-    const { projectId } = await params;
+    const { projectId, meetingId } = await params;
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -52,16 +47,15 @@ export async function GET(
     if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { data, error } = await supabase
-      .from('meetings')
+      .from('meeting_action_items')
       .select(`
         *,
-        members:created_by(id, first_name, last_name, avatar_url)
+        members:assigned_to(id, first_name, last_name, avatar_url)
       `)
-      .eq('project_id', projectId)
-      .order('start_time', { ascending: true });
+      .eq('meeting_id', meetingId)
+      .order('created_at', { ascending: true });
 
     if (error) throw error;
-
     return NextResponse.json(data);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -70,55 +64,39 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: Promise<{ projectId: string, meetingId: string }> }
 ) {
   try {
     const supabase = await createClient();
-    const { projectId } = await params;
+    const { projectId, meetingId } = await params;
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { hasAccess, role } = await verifyAccess(supabase, user, projectId);
+    const { hasAccess } = await verifyAccess(supabase, user, projectId);
     if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    if (role !== 'Organization Admin' && role !== 'Project Manager') {
-      return NextResponse.json({ error: 'Only Project Managers and Admins can schedule meetings' }, { status: 403 });
-    }
-
     const body = await request.json();
-    const result = meetingSchema.safeParse(body);
+    const result = actionItemSchema.safeParse(body);
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    const { data: meeting, error: meetingError } = await supabase
-      .from('meetings')
+    const { data, error } = await supabase
+      .from('meeting_action_items')
       .insert({
-        project_id: projectId,
-        sprint_id: result.data.sprint_id || null,
-        title: result.data.title,
-        objective: result.data.objective,
-        agenda: result.data.agenda,
-        type: result.data.type,
-        meeting_link: result.data.type === 'Online' ? result.data.meeting_link || null : null,
-        location: result.data.type === 'Physical' ? result.data.location || null : null,
-        start_time: result.data.start_time,
-        end_time: result.data.end_time,
-        created_by: user.id
+        meeting_id: meetingId,
+        description: result.data.description,
+        assigned_to: result.data.assigned_to || null,
+        status: result.data.status,
+        due_date: result.data.due_date || null
       })
-      .select()
+      .select(`
+        *,
+        members:assigned_to(id, first_name, last_name, avatar_url)
+      `)
       .single();
 
-    if (meetingError) throw meetingError;
-
-    // Automatically add the creator as a participant
-    // Since meeting_participants is new, we use a raw query or insert if we can
-    // Ignoring errors if the table isn't created yet in case user hasn't run migration
-    await supabase.from('meeting_participants').insert({
-      meeting_id: meeting.id,
-      member_id: user.id
-    });
-
-    return NextResponse.json(meeting);
+    if (error) throw error;
+    return NextResponse.json(data);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
