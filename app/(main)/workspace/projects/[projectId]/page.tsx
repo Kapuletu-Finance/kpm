@@ -73,19 +73,29 @@ export default function ProjectOverviewPage({ params }: { params: Promise<{ proj
             <p className="text-xs text-muted-foreground mt-1">Current project priority</p>
           </CardContent>
         </Card>
-        <Card className="md:col-span-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Project Owner</CardTitle>
+            <ShieldCheck className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm font-bold mt-1">Organization</div>
+            <p className="text-xs text-muted-foreground mt-1">Executive Authority</p>
+          </CardContent>
+        </Card>
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Project Manager</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-medium">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-medium shrink-0">
                 {project.project_manager?.first_name?.[0]}{project.project_manager?.last_name?.[0]}
               </div>
-              <div>
-                <div className="text-sm font-medium">{project.project_manager?.first_name} {project.project_manager?.last_name}</div>
-                <div className="text-xs text-muted-foreground">{project.project_manager?.email}</div>
+              <div className="overflow-hidden">
+                <div className="text-sm font-medium truncate">{project.project_manager?.first_name} {project.project_manager?.last_name}</div>
+                <div className="text-xs text-muted-foreground truncate">{project.project_manager?.email}</div>
               </div>
             </div>
           </CardContent>

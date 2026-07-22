@@ -133,6 +133,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   const doCreate = async (data: ProjectFormValues) => {
     const payload = {
       ...data,
+      project_manager_id: pmIdValue,
       business_goals: data.business_goals?.map((g) => g.value).filter(Boolean),
       target_users: data.target_users?.map((u) => u.value).filter(Boolean),
       success_metrics: data.success_metrics?.map((m) => m.value).filter(Boolean),
