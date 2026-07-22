@@ -62,9 +62,9 @@ export function Header() {
       {/* Separator for mobile */}
       <div className="h-6 w-px bg-border lg:hidden" aria-hidden="true" />
 
-      <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
+      <div className="flex flex-1 gap-x-4 items-center justify-between lg:gap-x-6">
         <GlobalSearch />
-        <div className="flex items-center gap-x-4 lg:gap-x-6">
+        <div className="flex items-center gap-x-4 lg:gap-x-6 ml-auto">
           
           <NotificationsPopover />
 

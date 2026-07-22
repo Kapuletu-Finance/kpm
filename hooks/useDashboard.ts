@@ -53,3 +53,25 @@ export function useDashboard() {
     },
   });
 }
+
+export function useOrgDashboard() {
+  return useQuery({
+    queryKey: ['dashboard', 'organization'],
+    queryFn: async () => {
+      const res = await fetch('/api/v1/dashboard/organization');
+      if (!res.ok) throw new Error('Failed to fetch org dashboard data');
+      return res.json();
+    },
+  });
+}
+
+export function useManagerDashboard() {
+  return useQuery({
+    queryKey: ['dashboard', 'manager'],
+    queryFn: async () => {
+      const res = await fetch('/api/v1/dashboard/manager');
+      if (!res.ok) throw new Error('Failed to fetch manager dashboard data');
+      return res.json();
+    },
+  });
+}

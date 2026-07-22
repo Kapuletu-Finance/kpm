@@ -62,7 +62,7 @@ export function GlobalSearch() {
   };
 
   return (
-    <div className="relative flex flex-1 w-full max-w-md" ref={searchRef}>
+    <div className="relative w-full max-w-md flex items-center" ref={searchRef}>
       <div className="relative w-full">
         <Search
           className="pointer-events-none absolute inset-y-0 left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"

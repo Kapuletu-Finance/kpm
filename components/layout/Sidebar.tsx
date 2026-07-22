@@ -7,14 +7,14 @@ import {
   LayoutDashboard, 
   Building2, 
   FolderKanban, 
-  Map, 
-  IterationCcw, 
-  CheckSquare, 
   MessageSquare,
   Settings,
-  Bell
+  Bell,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
+import { Button } from '@/components/ui/button';
 
 const navItems = [
   { name: 'Dashboard', href: '/workspace', icon: LayoutDashboard, exact: true },
@@ -24,7 +24,7 @@ const navItems = [
   { name: 'Notifications', href: '/workspace/notifications', icon: Bell },
 ];
 
-export function SidebarNavContent() {
+export function SidebarNavContent({ isCollapsed = false }: { isCollapsed?: boolean }) {
   const pathname = usePathname();
   const { data: notifications } = useNotifications();
   const unreadCount = notifications?.filter(n => !n.is_read).length || 0;
@@ -32,20 +32,26 @@ export function SidebarNavContent() {
   return (
     <>
       {/* Logo Area */}
-      <div className="flex items-center h-16 flex-shrink-0 px-6 border-b border-white/10">
-        <Link href="/workspace">
-          <Image
-            src="/logos/kpm/kpm-primary-white.svg"
-            alt="KPM by Kapuletu"
-            width={120}
-            height={36}
-            priority
-          />
+      <div className={`flex items-center h-16 flex-shrink-0 border-b border-white/10 ${isCollapsed ? 'justify-center px-2' : 'px-6'}`}>
+        <Link href="/workspace" className="flex items-center">
+          {isCollapsed ? (
+            <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center font-bold text-primary-foreground">
+              K
+            </div>
+          ) : (
+            <Image
+              src="/logos/kpm/kpm-primary-white.svg"
+              alt="KPM by Kapuletu"
+              width={120}
+              height={36}
+              priority
+            />
+          )}
         </Link>
       </div>
 
       {/* Navigation Links */}
-      <div className="flex-1 flex flex-col overflow-y-auto mt-4 px-3 space-y-1">
+      <div className={`flex-1 flex flex-col overflow-y-auto mt-4 space-y-1 ${isCollapsed ? 'px-2' : 'px-3'}`}>
         {navItems.map((item) => {
           const isActive = item.exact 
             ? pathname === item.href 
@@ -57,23 +63,29 @@ export function SidebarNavContent() {
             <Link
               key={item.name}
               href={item.href}
-              className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              title={isCollapsed ? item.name : undefined}
+              className={`group flex items-center py-2 text-sm font-medium rounded-md transition-colors ${
+                isCollapsed ? 'justify-center px-0' : 'px-3'
+              } ${
                 isActive 
                   ? 'bg-primary text-primary-foreground' 
                   : 'text-secondary-foreground/80 hover:bg-white/10 hover:text-white'
               }`}
             >
               <Icon 
-                className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                className={`flex-shrink-0 h-5 w-5 ${
                   isActive ? 'text-primary-foreground' : 'text-secondary-foreground/70 group-hover:text-white'
-                }`} 
+                } ${!isCollapsed && 'mr-3'}`} 
                 aria-hidden="true" 
               />
-              {item.name}
-              {item.name === 'Notifications' && unreadCount > 0 && (
+              {!isCollapsed && <span>{item.name}</span>}
+              {!isCollapsed && item.name === 'Notifications' && unreadCount > 0 && (
                 <span className="ml-auto inline-block py-0.5 px-2 text-xs font-semibold rounded-full bg-accent text-accent-foreground">
                   {unreadCount}
                 </span>
+              )}
+              {isCollapsed && item.name === 'Notifications' && unreadCount > 0 && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full"></span>
               )}
             </Link>
           );
@@ -81,23 +93,43 @@ export function SidebarNavContent() {
       </div>
 
       {/* Bottom Settings */}
-      <div className="flex-shrink-0 p-4 border-t border-white/10">
+      <div className={`flex-shrink-0 border-t border-white/10 ${isCollapsed ? 'p-2' : 'p-4'}`}>
         <Link
           href="/workspace/settings"
-          className="group flex items-center px-3 py-2 text-sm font-medium rounded-md text-secondary-foreground/80 hover:bg-white/10 hover:text-white transition-colors"
+          title={isCollapsed ? 'Settings' : undefined}
+          className={`group flex items-center py-2 text-sm font-medium rounded-md text-secondary-foreground/80 hover:bg-white/10 hover:text-white transition-colors ${
+            isCollapsed ? 'justify-center px-0' : 'px-3'
+          }`}
         >
-          <Settings className="mr-3 h-5 w-5 text-secondary-foreground/70 group-hover:text-white" />
-          Settings
+          <Settings className={`flex-shrink-0 h-5 w-5 text-secondary-foreground/70 group-hover:text-white ${!isCollapsed && 'mr-3'}`} />
+          {!isCollapsed && 'Settings'}
         </Link>
       </div>
     </>
   );
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  isCollapsed?: boolean;
+  onToggle?: () => void;
+}
+
+export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
   return (
-    <div className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-secondary text-secondary-foreground">
-      <SidebarNavContent />
+    <div className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 bg-secondary text-secondary-foreground transition-all duration-300 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}`}>
+      <SidebarNavContent isCollapsed={isCollapsed} />
+      
+      {/* Collapse Toggle Button */}
+      {onToggle && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggle}
+          className="absolute -right-4 top-20 h-8 w-8 rounded-full border shadow-sm bg-background hover:bg-muted text-foreground z-50"
+        >
+          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </Button>
+      )}
     </div>
   );
 }
