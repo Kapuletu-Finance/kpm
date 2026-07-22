@@ -183,51 +183,50 @@ export default function OrganizationPage() {
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Members</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{members?.length || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Members</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{members?.filter((m: any) => m.status === 'Active').length || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Invites</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{members?.filter((m: any) => m.status === 'Invited').length || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Project Managers</CardTitle>
-            <UserCog className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{members?.filter((m: any) => m.organization_role === 'Project Manager').length || 0}</div>
-          </CardContent>
-        </Card>
-      </div>
+      {isOrgAdmin && (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Members</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{members?.length || 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Members</CardTitle>
+              <UserCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{members?.filter((m: any) => m.status === 'Active').length || 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Invites</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{members?.filter((m: any) => m.status === 'Invited').length || 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Project Managers</CardTitle>
+              <UserCog className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{members?.filter((m: any) => m.organization_role === 'Project Manager').length || 0}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Team Members</CardTitle>
-          <CardDescription>
-            A list of all users who have access to this workspace.
-          </CardDescription>
+          <CardTitle>{isOrgAdmin ? 'Members' : 'Directory'}</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -236,10 +235,14 @@ export default function OrganizationPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Invited</TableHead>
-                <TableHead>Last Active</TableHead>
-                {isOrgAdmin && <TableHead className="text-right">Actions</TableHead>}
+                {isOrgAdmin && (
+                  <>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Invited</TableHead>
+                    <TableHead>Last Active</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -255,21 +258,25 @@ export default function OrganizationPage() {
                       {member.organization_role}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={
-                      member.status === 'Active' 
-                        ? 'border-success text-success bg-success/10' 
-                        : 'border-accent text-accent bg-accent/10'
-                    }>
-                      {member.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {member.invited_at ? new Date(member.invited_at).toLocaleDateString() : '-'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {member.last_sign_in_at ? new Date(member.last_sign_in_at).toLocaleDateString() : (member.status === 'Active' ? 'Yes' : 'Never')}
-                  </TableCell>
+                  {isOrgAdmin && (
+                    <>
+                      <TableCell>
+                        <Badge variant="outline" className={
+                          member.status === 'Active' 
+                            ? 'border-success text-success bg-success/10' 
+                            : 'border-accent text-accent bg-accent/10'
+                        }>
+                          {member.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {member.invited_at ? new Date(member.invited_at).toLocaleDateString() : '-'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {member.last_sign_in_at ? new Date(member.last_sign_in_at).toLocaleDateString() : (member.status === 'Active' ? 'Yes' : 'Never')}
+                      </TableCell>
+                    </>
+                  )}
                   {isOrgAdmin && (
                     <TableCell className="text-right space-x-2">
                       {member.status === 'Invited' && (
