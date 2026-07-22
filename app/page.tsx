@@ -1,33 +1,25 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/store/AuthContext";
 
 export default function Home() {
   const router = useRouter();
-  const { isLoading } = useAuth();
-  const [targetRoute, setTargetRoute] = useState<string | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash;
-    // Intercept stranded Supabase hashes and determine the correct destination
+    // Intercept stranded Supabase hashes before middleware bounces us to /login.
+    // We use a SOFT navigation (router.replace) and preserve the hash so that 
+    // Supabase's createBrowserClient (which mounts in AuthContext) can finish
+    // its asynchronous token exchange without the browser aborting the network request.
     if (hash && hash.includes('type=invite')) {
-      setTargetRoute('/accept-invite');
+      router.replace('/accept-invite' + hash);
     } else if (hash && hash.includes('type=recovery')) {
-      setTargetRoute('/reset-password');
+      router.replace('/reset-password' + hash);
     } else {
-      setTargetRoute('/workspace');
+      router.replace('/workspace');
     }
-  }, []);
-
-  useEffect(() => {
-    // Wait for Supabase to finish parsing the hash and establishing the session
-    // before we navigate away, preventing 'AuthSessionMissingError' and token corruption.
-    if (targetRoute && !isLoading) {
-      router.replace(targetRoute);
-    }
-  }, [targetRoute, isLoading, router]);
+  }, [router]);
 
   return null;
 }
