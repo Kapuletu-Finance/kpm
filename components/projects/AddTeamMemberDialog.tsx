@@ -25,6 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 
 const addMemberSchema = z.object({
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
   member_id: z.string().optional(),
   project_role: z.enum(['Project Manager', 'Member']),
@@ -88,7 +90,9 @@ export function AddTeamMemberDialog({ projectId, open, onOpenChange }: AddTeamMe
       }
 
       const payload = {
-        email: tab === 'invite' ? data.email : undefined,
+        first_name: tab === 'invite' || !isAdmin ? data.first_name : undefined,
+        last_name: tab === 'invite' || !isAdmin ? data.last_name : undefined,
+        email: tab === 'invite' || !isAdmin ? data.email : undefined,
         member_id: tab === 'existing' ? data.member_id : undefined,
         project_role: data.project_role,
         functional_role: data.functional_role,
@@ -241,6 +245,16 @@ export function AddTeamMemberDialog({ projectId, open, onOpenChange }: AddTeamMe
                 </TabsContent>
 
                 <TabsContent value="invite" className="mt-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="first_name">First Name</Label>
+                      <Input id="first_name" placeholder="John" {...register('first_name')} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="last_name">Last Name</Label>
+                      <Input id="last_name" placeholder="Doe" {...register('last_name')} />
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address <span className="text-destructive">*</span></Label>
                     <div className="relative">
@@ -261,6 +275,16 @@ export function AddTeamMemberDialog({ projectId, open, onOpenChange }: AddTeamMe
               </Tabs>
             ) : (
               <div className="space-y-4 mt-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="first_name">First Name</Label>
+                    <Input id="first_name" placeholder="John" {...register('first_name')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="last_name">Last Name</Label>
+                    <Input id="last_name" placeholder="Doe" {...register('last_name')} />
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address <span className="text-destructive">*</span></Label>
                   <div className="relative">

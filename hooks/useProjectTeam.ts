@@ -21,6 +21,8 @@ export function useAddProjectMember(projectId: string) {
 
   return useMutation({
     mutationFn: async (data: {
+      first_name?: string;
+      last_name?: string;
       email?: string;
       member_id?: string;
       project_role: string;

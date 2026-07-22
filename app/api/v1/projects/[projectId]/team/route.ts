@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 
 const addMemberSchema = z.object({
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
   email: z.string().email().optional(),
   member_id: z.string().uuid().optional(),
   project_role: z.enum(['Project Manager', 'Member']),
@@ -97,7 +99,7 @@ export async function POST(
     // Get caller's member record
     const { data: callerMember, error: callerError } = await supabase
       .from('members')
-      .select('organization_id, organization_role')
+      .select('organization_id, organization_role, first_name, last_name, organizations (name)')
       .eq('id', user.id)
       .single();
 
@@ -133,7 +135,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
     }
 
-    const { email, member_id, project_role, functional_role, role_responsibilities, review_authority } = result.data;
+    const { first_name, last_name, email, member_id, project_role, functional_role, role_responsibilities, review_authority } = result.data;
 
     // Strict constraint: PMs cannot add other PMs
     if (callerMember.organization_role !== 'Organization Admin' && project_role === 'Project Manager') {
@@ -164,6 +166,11 @@ export async function POST(
         const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite`;
         
         const { data: inviteData, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
+          data: {
+            inviter_name: `${callerMember.first_name} ${callerMember.last_name}`,
+            organization_name: (Array.isArray(callerMember.organizations) ? callerMember.organizations[0]?.name : (callerMember.organizations as any)?.name) || 'Your Organization',
+            invited_role: project_role
+          },
           redirectTo
         });
 
@@ -184,8 +191,8 @@ export async function POST(
           .insert({
             id: targetMemberId,
             organization_id: callerMember.organization_id,
-            first_name: 'Pending',
-            last_name: 'User',
+            first_name: first_name || 'Pending',
+            last_name: last_name || 'User',
             email: email,
             organization_role: 'Member',
             status: 'Invited',
@@ -214,8 +221,9 @@ export async function POST(
       return NextResponse.json({ error: 'Member is already in this project' }, { status: 400 });
     }
 
-    // Insert into project_members
-    const { data: newProjectMember, error: insertError } = await supabase
+    // Use adminSupabase to insert into project_members to bypass any initial RLS delays for new users
+    const adminSupabase = createAdminClient();
+    const { data: newProjectMember, error: insertError } = await adminSupabase
       .from('project_members')
       .insert({
         project_id: projectId,
