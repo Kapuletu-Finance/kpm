@@ -19,6 +19,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 const inviteSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Please enter a valid email address'),
   role: z.enum(['Project Manager', 'Member']),
 });
@@ -108,6 +110,30 @@ export default function OrganizationPage() {
               </DialogHeader>
               
               <form onSubmit={handleSubmit(onInviteSubmit)} className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input
+                      id="firstName"
+                      placeholder="John"
+                      {...register('firstName')}
+                      className={errors.firstName ? 'border-destructive' : ''}
+                    />
+                    {errors.firstName && <p className="text-sm text-destructive">{errors.firstName.message}</p>}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input
+                      id="lastName"
+                      placeholder="Doe"
+                      {...register('lastName')}
+                      className={errors.lastName ? 'border-destructive' : ''}
+                    />
+                    {errors.lastName && <p className="text-sm text-destructive">{errors.lastName.message}</p>}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
                   <Input

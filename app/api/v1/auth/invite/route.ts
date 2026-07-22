@@ -6,6 +6,8 @@ import { z } from 'zod';
 const inviteSchema = z.object({
   email: z.string().email('Invalid email address'),
   role: z.enum(['Project Manager', 'Member']),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
 });
 
 export async function POST(request: Request) {
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email, role } = result.data;
+    const { email, role, firstName, lastName } = result.data;
     const adminSupabase = createAdminClient(); // Bypasses RLS
 
     // 3. Invite the user via Supabase Admin API
@@ -81,8 +83,8 @@ export async function POST(request: Request) {
       .insert({
         id: invitedUser.id,
         organization_id: callerMember.organization_id,
-        first_name: 'Pending',
-        last_name: 'User',
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
         email: email,
         organization_role: role,
         status: 'Invited',

@@ -52,7 +52,7 @@ export function useInviteMember() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: { email: string; role: string }) => {
+    mutationFn: async (data: { email: string; role: string; firstName: string; lastName: string }) => {
       const response = await fetch('/api/v1/auth/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
