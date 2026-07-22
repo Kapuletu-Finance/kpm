@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -24,6 +24,16 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const loginMutation = useLoginMutation();
+
+  useEffect(() => {
+    // Intercept misplaced Supabase auth redirects
+    const hash = window.location.hash;
+    if (hash && hash.includes('type=invite')) {
+      window.location.href = '/accept-invite' + hash;
+    } else if (hash && hash.includes('type=recovery')) {
+      window.location.href = '/reset-password' + hash;
+    }
+  }, []);
 
   const {
     register,
