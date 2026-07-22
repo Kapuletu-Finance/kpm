@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/store/AuthContext';
@@ -89,10 +89,8 @@ export function DangerZone({ project }: { project: any }) {
           </div>
           
           <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-            <DialogTrigger>
-              <Button variant="destructive" disabled={!isOrgAdmin} type="button">
-                Delete Project
-              </Button>
+            <DialogTrigger className={buttonVariants({ variant: 'destructive' })} disabled={!isOrgAdmin}>
+              Delete Project
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>

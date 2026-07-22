@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useDeleteOrganization } from '@/hooks/useOrganization';
@@ -70,10 +70,8 @@ export function DangerZone({ organization }: { organization: any }) {
           </div>
           
           <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-            <DialogTrigger>
-              <Button variant="destructive" disabled={!isOrgAdmin} type="button">
-                Delete Organization
-              </Button>
+            <DialogTrigger className={buttonVariants({ variant: 'destructive' })} disabled={!isOrgAdmin}>
+              Delete Organization
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
