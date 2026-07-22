@@ -18,9 +18,6 @@ const navItems = [
   { name: 'Dashboard', href: '/workspace', icon: LayoutDashboard, exact: true },
   { name: 'Organization', href: '/workspace/organization', icon: Building2 },
   { name: 'Projects', href: '/workspace/projects', icon: FolderKanban },
-  { name: 'Roadmaps', href: '/workspace/roadmaps', icon: Map },
-  { name: 'Sprints', href: '/workspace/sprints', icon: IterationCcw },
-  { name: 'Deliverables', href: '/workspace/deliverables', icon: CheckSquare },
   { name: 'Collaboration', href: '/workspace/collaboration', icon: MessageSquare },
 ];
 

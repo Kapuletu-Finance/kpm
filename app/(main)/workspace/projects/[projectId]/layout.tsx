@@ -5,7 +5,7 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useProject } from '@/hooks/useProjects';
 import { useAuth } from '@/store/AuthContext';
-import { Loader2, ArrowLeft, LayoutDashboard, Users, Route, Settings, Settings2 } from 'lucide-react';
+import { Loader2, ArrowLeft, LayoutDashboard, Users, Route, Settings2, Timer } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -47,8 +47,9 @@ export default function ProjectLayout({
 
   const tabs = [
     { name: 'Overview', href: `/workspace/projects/${project.id}`, icon: LayoutDashboard },
-    { name: 'Team', href: `/workspace/projects/${project.id}/team`, icon: Users },
+    { name: 'Sprints', href: `/workspace/projects/${project.id}/sprints`, icon: Timer },
     { name: 'Roadmap', href: `/workspace/projects/${project.id}/roadmap`, icon: Route },
+    { name: 'Team', href: `/workspace/projects/${project.id}/team`, icon: Users },
   ];
 
   if (isManagerOrAdmin) {
