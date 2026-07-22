@@ -44,7 +44,7 @@ export default function AcceptInvitePage() {
       await fetch('/api/v1/auth/activate', { method: 'POST' });
       
       toast.success('Account activated successfully');
-      router.push('/workspace');
+      window.location.href = '/workspace';
     } catch (error: any) {
       toast.error(error.message || 'Failed to activate account');
       setIsSubmitting(false);

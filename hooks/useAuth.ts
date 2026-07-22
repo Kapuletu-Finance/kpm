@@ -22,7 +22,7 @@ export function useLoginMutation() {
       return response.json();
     },
     onSuccess: () => {
-      router.push('/workspace');
+      window.location.href = '/workspace';
     },
   });
 }
