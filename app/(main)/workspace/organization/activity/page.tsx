@@ -18,7 +18,7 @@ export default function OrganizationActivityPage() {
   if (error) {
     return (
       <div className="p-6 bg-destructive/10 text-destructive rounded-lg max-w-4xl mx-auto mt-6">
-        Failed to load organization activity logs: {error.message}
+        Failed to load recent activities: {error.message}
       </div>
     );
   }

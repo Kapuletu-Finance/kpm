@@ -48,6 +48,8 @@ interface CreateProjectDialogProps {
 
 export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogProps) {
   const [step, setStep] = useState(1);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const createMutation = useCreateProject();
   const { data: members } = useMembers();
   const { memberProfile } = useAuth();
@@ -104,15 +106,23 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   })();
 
   const onNext = async () => {
-    let isValid = false;
-    if (step === 1) {
-      isValid = await trigger(['name', 'description', 'priority', 'start_date', 'end_date']);
-    } else if (step === 2) {
-      isValid = await trigger(['business_goals', 'target_users', 'success_metrics']);
-    }
+    if (isValidating || isTransitioning) return;
+    setIsValidating(true);
+    try {
+      let isValid = false;
+      if (step === 1) {
+        isValid = await trigger(['name', 'description', 'priority', 'start_date', 'end_date']);
+      } else if (step === 2) {
+        isValid = await trigger(['business_goals', 'target_users', 'success_metrics']);
+      }
 
-    if (isValid) {
-      setStep(step + 1);
+      if (isValid) {
+        setIsTransitioning(true);
+        setStep(step + 1);
+        setTimeout(() => setIsTransitioning(false), 400);
+      }
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -411,7 +421,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={createMutation.isPending}
+                  disabled={createMutation.isPending || isTransitioning}
                   onClick={onCreateWithoutLinks}
                   className="text-muted-foreground text-sm"
                 >
@@ -420,12 +430,13 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
               )}
 
               {step < 3 ? (
-                <Button type="button" onClick={onNext}>
+                <Button type="button" onClick={onNext} disabled={isValidating || isTransitioning}>
+                  {(isValidating || isTransitioning) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   Next <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               ) : (
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                <Button type="submit" disabled={createMutation.isPending || isTransitioning}>
+                  {(createMutation.isPending || isTransitioning) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Create Project
                 </Button>
               )}

@@ -108,6 +108,8 @@ function projectDefaults(project: any): EditProjectFormValues {
 // ---------------------------------------------------------------------------
 export function EditProjectDialog({ project, open, onOpenChange }: EditProjectDialogProps) {
   const [step, setStep] = useState(1);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const updateMutation = useUpdateProject();
   const { data: members } = useMembers();
 
@@ -153,13 +155,23 @@ export function EditProjectDialog({ project, open, onOpenChange }: EditProjectDi
   // Navigation
   // ------------------------------------------------------------------
   const onNext = async () => {
-    let valid = false;
-    if (step === 1) {
-      valid = await trigger(['name', 'description', 'priority', 'status', 'start_date', 'end_date']);
-    } else if (step === 2) {
-      valid = await trigger(['business_goals', 'target_users', 'success_metrics']);
+    if (isValidating || isTransitioning) return;
+    setIsValidating(true);
+    try {
+      let valid = false;
+      if (step === 1) {
+        valid = await trigger(['name', 'description', 'priority', 'status', 'start_date', 'end_date']);
+      } else if (step === 2) {
+        valid = await trigger(['business_goals', 'target_users', 'success_metrics']);
+      }
+      if (valid) {
+        setIsTransitioning(true);
+        setStep(step + 1);
+        setTimeout(() => setIsTransitioning(false), 400);
+      }
+    } finally {
+      setIsValidating(false);
     }
-    if (valid) setStep(step + 1);
   };
 
   const onBack = () => setStep(step - 1);
@@ -519,15 +531,14 @@ export function EditProjectDialog({ project, open, onOpenChange }: EditProjectDi
 
             <div className="flex items-center gap-3">
               {step < 3 ? (
-                <Button type="button" onClick={onNext}>
+                <Button type="button" onClick={onNext} disabled={isValidating || isTransitioning}>
+                  {(isValidating || isTransitioning) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   Next <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               ) : (
-                <Button type="submit" disabled={updateMutation.isPending}>
-                  {updateMutation.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Save All Changes
+                <Button type="submit" disabled={updateMutation.isPending || isTransitioning}>
+                  {(updateMutation.isPending || isTransitioning) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Save Changes
                 </Button>
               )}
             </div>

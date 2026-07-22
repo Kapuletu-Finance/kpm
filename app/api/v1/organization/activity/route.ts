@@ -11,14 +11,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user is an admin or owner of the organization
+    // Verify user is an admin of the organization
     const { data: member } = await supabase
       .from('members')
-      .select('role')
+      .select('organization_role')
       .eq('id', user.id)
       .single();
     
-    if (!member || (member.role !== 'admin' && member.role !== 'owner')) {
+    if (!member || member.organization_role !== 'Organization Admin') {
       return NextResponse.json({ error: 'Not authorized for organization logs' }, { status: 403 });
     }
 

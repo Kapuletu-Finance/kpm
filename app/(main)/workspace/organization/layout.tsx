@@ -19,7 +19,7 @@ export default function OrganizationLayout({
   ];
 
   if (isOrgAdmin) {
-    tabs.push({ name: 'Audit Logs', href: '/workspace/organization/activity', icon: Activity, exact: false });
+    tabs.push({ name: 'Recent Activities', href: '/workspace/organization/activity', icon: Activity, exact: false });
   }
 
   return (
@@ -30,7 +30,7 @@ export default function OrganizationLayout({
           Organization
         </h1>
         <p className="text-muted-foreground mt-2">
-          Manage your workspace members and view organization-wide activity.
+          Manage your workspace members and view organization-wide recent activities.
         </p>
       </div>
 
