@@ -34,6 +34,7 @@ export async function POST(request: Request) {
         data: {
           full_name: fullName,
         },
+        emailRedirectTo: `${new URL(request.url).origin}/api/v1/auth/callback`,
       },
     });
 
