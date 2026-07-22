@@ -26,6 +26,7 @@ export default function SprintPlanPage({ params }: { params: Promise<{ projectId
 
   const updateSprintMutation = useUpdateSprint(projectId);
   const updateFeatureMutation = useUpdateFeature(projectId);
+  const queryClient = useQueryClient();
 
   const isAdmin = memberProfile?.organization_role === 'Organization Admin';
   const isPM = teamMembers?.some((m: any) => m.member_id === memberProfile?.id && m.project_role === 'Project Manager');
@@ -49,8 +50,6 @@ export default function SprintPlanPage({ params }: { params: Promise<{ projectId
       router.push(`/workspace/projects/${projectId}/sprints/${sprintId}/board`);
     } catch (error) { toast.error('Failed to start sprint'); }
   };
-
-  const queryClient = useQueryClient();
 
   const handleAddToSprint = async (featureId: string) => {
     try {
