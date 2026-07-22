@@ -3,18 +3,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { 
-  LayoutDashboard, 
-  Building2, 
-  FolderKanban, 
-  MessageSquare,
-  Settings,
-  Bell,
-  ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
+import { Bell, Building2, ChevronLeft, ChevronRight, FolderKanban, LayoutDashboard, MessageSquare, Settings, Users } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/store/AuthContext';
 
 const navItems = [
   { name: 'Dashboard', href: '/workspace', icon: LayoutDashboard, exact: true },
@@ -27,7 +19,21 @@ const navItems = [
 export function SidebarNavContent({ isCollapsed = false }: { isCollapsed?: boolean }) {
   const pathname = usePathname();
   const { data: notifications } = useNotifications();
+  const { memberProfile } = useAuth();
   const unreadCount = notifications?.filter(n => !n.is_read).length || 0;
+  
+  const isOrgAdmin = memberProfile?.organization_role === 'Organization Admin';
+
+  const dynamicNavItems = navItems.map(item => {
+    if (item.name === 'Organization') {
+      return {
+        ...item,
+        name: isOrgAdmin ? 'Organization' : 'Directory',
+        icon: isOrgAdmin ? Building2 : Users,
+      };
+    }
+    return item;
+  });
 
   return (
     <>
@@ -52,7 +58,7 @@ export function SidebarNavContent({ isCollapsed = false }: { isCollapsed?: boole
 
       {/* Navigation Links */}
       <div className={`flex-1 flex flex-col overflow-y-auto mt-4 space-y-1 ${isCollapsed ? 'px-2' : 'px-3'}`}>
-        {navItems.map((item) => {
+        {dynamicNavItems.map((item) => {
           const isActive = item.exact 
             ? pathname === item.href 
             : pathname?.startsWith(item.href);

@@ -26,11 +26,13 @@ export default function OrganizationLayout({
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-          <Building2 className="h-8 w-8 text-primary" />
-          Organization
+          {isOrgAdmin ? <Building2 className="h-8 w-8 text-primary" /> : <Users className="h-8 w-8 text-primary" />}
+          {isOrgAdmin ? 'Organization' : 'People'}
         </h1>
         <p className="text-muted-foreground mt-2">
-          Manage your workspace members and view organization-wide recent activities.
+          {isOrgAdmin 
+            ? 'Manage your workspace members and view organization-wide recent activities.'
+            : 'View team members and your colleagues across the workspace.'}
         </p>
       </div>
 
