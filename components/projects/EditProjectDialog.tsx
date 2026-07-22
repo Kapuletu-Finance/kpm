@@ -217,12 +217,7 @@ export function EditProjectDialog({ project, open, onOpenChange }: EditProjectDi
     onOpenChange(val);
   };
 
-  // Block Enter-key implicit submission on steps 1 & 2
-  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
-    if (e.key === 'Enter' && step < 3) {
-      e.preventDefault();
-    }
-  };
+
 
   // ------------------------------------------------------------------
   // Step renderers

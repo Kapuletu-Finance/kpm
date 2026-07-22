@@ -157,11 +157,18 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     }
   };
 
-  // Prevent Enter key from triggering implicit form submission on steps 1 and 2.
-  // HTML forms submit on Enter in any text input when a submit button exists anywhere
-  // in the form tree — this guard blocks that on non-final steps.
+  // Block ALL Enter-key form submissions unless the user is explicitly
+  // pressing Enter on the submit button. This covers:
+  //   • Text/date inputs on steps 1 & 2
+  //   • URL inputs on step 3 (browser autocomplete pick via Enter would
+  //     otherwise fire form submit)
   const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
-    if (e.key === 'Enter' && step < 3) {
+    if (e.key !== 'Enter') return;
+    const target = e.target as HTMLElement;
+    const isSubmitButton =
+      target.tagName === 'BUTTON' &&
+      (target as HTMLButtonElement).type === 'submit';
+    if (!isSubmitButton) {
       e.preventDefault();
     }
   };
@@ -324,19 +331,19 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
 
       <div className="space-y-2">
         <Label htmlFor="github_repository">GitHub Repository URL</Label>
-        <Input id="github_repository" type="url" placeholder="https://github.com/..." {...register('github_repository')} />
+        <Input id="github_repository" type="text" placeholder="https://github.com/..." {...register('github_repository')} />
         {errors.github_repository && <p className="text-sm text-destructive">{errors.github_repository.message}</p>}
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="figma_url">Figma Design URL</Label>
-        <Input id="figma_url" type="url" placeholder="https://figma.com/..." {...register('figma_url')} />
+        <Input id="figma_url" type="text" placeholder="https://figma.com/..." {...register('figma_url')} />
         {errors.figma_url && <p className="text-sm text-destructive">{errors.figma_url.message}</p>}
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="swagger_url">Swagger/API Docs URL</Label>
-        <Input id="swagger_url" type="url" placeholder="https://..." {...register('swagger_url')} />
+        <Input id="swagger_url" type="text" placeholder="https://..." {...register('swagger_url')} />
         {errors.swagger_url && <p className="text-sm text-destructive">{errors.swagger_url.message}</p>}
       </div>
 
