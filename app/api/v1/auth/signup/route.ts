@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     const result = signupSchema.safeParse(body);
 
     if (!result.success) {
+      console.error('Zod validation error:', result.error.flatten());
       return NextResponse.json(
         { error: 'Invalid payload', details: result.error.flatten() },
         { status: 400 }
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     });
 
     if (authError) {
+      console.error('Supabase auth signup error:', authError);
       return NextResponse.json({ error: authError.message }, { status: 400 });
     }
 
