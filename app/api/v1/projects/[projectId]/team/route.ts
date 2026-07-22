@@ -69,7 +69,7 @@ export async function GET(
         )
       `)
       .eq('project_id', projectId)
-      .order('created_at', { ascending: true });
+      .order('joined_at', { ascending: true });
 
     if (fetchError) {
       return NextResponse.json({ error: fetchError.message }, { status: 400 });
