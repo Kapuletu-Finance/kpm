@@ -37,6 +37,8 @@ export interface Feature {
   status: 'Idea' | 'Requirements' | 'Design' | 'Development' | 'Integration' | 'Testing' | 'Approval' | 'Released';
   start_date: string | null;
   due_date: string | null;
+  sprint_id?: string | null;
+  modules?: any;
   feature_members?: FeatureMember[];
   feature_checklists?: FeatureChecklist[];
   created_at: string;

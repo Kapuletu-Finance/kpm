@@ -16,6 +16,7 @@ const updateFeatureSchema = z.object({
   status: z.enum(['Idea', 'Requirements', 'Design', 'Development', 'Integration', 'Testing', 'Approval', 'Released']).optional(),
   start_date: z.string().optional().nullable(),
   due_date: z.string().optional().nullable(),
+  sprint_id: z.string().optional().nullable(),
 });
 
 async function verifyAccess(supabase: any, user: any, projectId: string) {
