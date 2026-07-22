@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 const inviteSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -32,6 +33,7 @@ export default function OrganizationPage() {
   const resendMutation = useResendInviteMutation();
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
 
   const {
     register,
@@ -68,13 +70,12 @@ export default function OrganizationPage() {
   };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (confirm('Are you sure you want to remove this member from the organization?')) {
-      try {
-        await removeMutation.mutateAsync(memberId);
-        toast.success('Member removed');
-      } catch (error: any) {
-        toast.error(error.message || 'Failed to remove member');
-      }
+    try {
+      await removeMutation.mutateAsync(memberId);
+      toast.success('Member removed completely from the organization');
+      setMemberToRemove(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to remove member');
     }
   };
 
@@ -249,19 +250,19 @@ export default function OrganizationPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-primary hover:text-primary hover:bg-primary/10"
+                          className="text-primary hover:text-primary hover:bg-primary/10 gap-1.5"
                           onClick={() => handleResendInvite(member.id)}
                           disabled={resendMutation.isPending}
-                          title="Resend Invitation"
                         >
                           <Send className="h-4 w-4" />
+                          <span className="hidden sm:inline">Resend Invite</span>
                         </Button>
                       )}
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleRemoveMember(member.id)}
+                        onClick={() => setMemberToRemove(member.id)}
                         disabled={member.id === memberProfile?.id || removeMutation.isPending}
                         title="Remove Member"
                       >
@@ -282,6 +283,27 @@ export default function OrganizationPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!memberToRemove} onOpenChange={(open) => !open && setMemberToRemove(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently remove the member from your organization and completely revoke their authentication access.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => memberToRemove && handleRemoveMember(memberToRemove)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={removeMutation.isPending}
+            >
+              {removeMutation.isPending ? 'Removing...' : 'Remove Member'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
