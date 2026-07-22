@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
+import { sendProjectAssignmentEmail } from '@/lib/email.server';
 
 const projectSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     // Get caller's member record and organization
     const { data: callerMember, error: callerError } = await supabase
       .from('members')
-      .select('organization_id, organization_role')
+      .select('organization_id, organization_role, first_name, last_name')
       .eq('id', user.id)
       .single();
 
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
       // If an Org Admin passes a specific PM, verify they exist and have rights
       const { data: pmMember, error: pmError } = await supabase
         .from('members')
-        .select('id, organization_id, organization_role')
+        .select('id, organization_id, organization_role, first_name, last_name, email')
         .eq('id', data.project_manager_id)
         .single();
       
@@ -119,6 +120,23 @@ export async function POST(request: Request) {
     if (memberInsertError) {
       console.error('Failed to add creator as project member:', memberInsertError);
       // We don't fail the whole request, but this shouldn't happen
+    }
+
+    // Send assignment email if Admin assigned to someone else
+    if (callerMember.organization_role === 'Organization Admin' && pmId !== user.id && data.project_manager_id) {
+      // Re-fetch pm email if not already present or just fetch it explicitly if we need to.
+      // We already fetched pmMember with email if they entered the if-block above!
+      // But we need pmMember in this scope. Let's just do a quick fetch to be safe.
+      const { data: finalPm } = await supabase.from('members').select('first_name, last_name, email').eq('id', pmId).single();
+      if (finalPm && finalPm.email) {
+        sendProjectAssignmentEmail({
+          toEmail: finalPm.email,
+          pmName: finalPm.first_name,
+          projectName: data.name,
+          adminName: `${callerMember.first_name} ${callerMember.last_name}`,
+          projectId: newProject.id
+        }).catch(e => console.error('Email failed:', e));
+      }
     }
 
     return NextResponse.json(newProject, { status: 201 });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
+import { sendProjectAssignmentEmail } from '@/lib/email.server';
 
 const updateProjectSchema = z.object({
   name: z.string().min(1).optional(),
@@ -105,7 +106,7 @@ export async function PATCH(
     // Get caller's role
     const { data: callerMember, error: callerError } = await supabase
       .from('members')
-      .select('organization_id, organization_role')
+      .select('organization_id, organization_role, first_name, last_name')
       .eq('id', user.id)
       .single();
 
@@ -116,7 +117,7 @@ export async function PATCH(
     // Fetch project
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('organization_id, project_manager_id')
+      .select('organization_id, project_manager_id, name')
       .eq('id', projectId)
       .single();
 
@@ -159,7 +160,7 @@ export async function PATCH(
       // Verify the new PM exists and has correct role
       const { data: pmMember, error: pmError } = await supabase
         .from('members')
-        .select('id, organization_id, organization_role')
+        .select('id, organization_id, organization_role, first_name, last_name, email')
         .eq('id', data.project_manager_id)
         .single();
         
@@ -184,6 +185,15 @@ export async function PATCH(
         
       if (memberUpsertError) {
         console.error('Failed to update project members during reassignment', memberUpsertError);
+      } else if (pmMember.email) {
+        // Send email since reassignment was successful
+        sendProjectAssignmentEmail({
+          toEmail: pmMember.email,
+          pmName: pmMember.first_name,
+          projectName: project.name,
+          adminName: `${callerMember.first_name} ${callerMember.last_name}`,
+          projectId: projectId
+        }).catch(e => console.error('Email failed:', e));
       }
     } else {
       delete updatePayload.project_manager_id;
