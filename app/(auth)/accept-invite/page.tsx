@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -25,6 +25,30 @@ type AcceptInviteFormValues = z.infer<typeof acceptInviteSchema>;
 export default function AcceptInvitePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    // Manual Token Hydration:
+    // Bypass Next.js/Supabase SSR race conditions by manually establishing the session
+    const hash = window.location.hash;
+    if (hash) {
+      // The hash might start with #, we need to treat it like query params
+      const paramsString = hash.startsWith('#') ? hash.substring(1) : hash;
+      const params = new URLSearchParams(paramsString);
+      
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      
+      if (access_token && refresh_token) {
+        const supabase = createClient();
+        // Force the session into existence immediately
+        supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
+          if (error) {
+            console.error('Manual hydration error:', error);
+          }
+        });
+      }
+    }
+  }, []);
 
   const {
     register,
