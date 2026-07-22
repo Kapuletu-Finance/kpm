@@ -19,11 +19,32 @@ export async function GET(req: NextRequest) {
 
     const orgId = memberProfile.organization_id;
 
-    // 1. Projects summary
-    const { data: projectsData, count: projectsCount } = await supabase
-      .from('projects')
-      .select('id, name, status, priority, end_date, members!projects_project_manager_id_fkey(first_name, last_name)', { count: 'exact' })
-      .eq('organization_id', orgId);
+    // Run all independent queries concurrently to eliminate waterfall
+    const [
+      { data: projectsData, count: projectsCount },
+      { count: membersCount },
+      { count: invitesCount }
+    ] = await Promise.all([
+      // 1. Projects summary
+      supabase
+        .from('projects')
+        .select('id, name, status, priority, end_date, members!projects_project_manager_id_fkey(first_name, last_name)', { count: 'exact' })
+        .eq('organization_id', orgId),
+      
+      // 2. Members count
+      supabase
+        .from('members')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('status', 'Active'),
+        
+      // 3. Pending Invites
+      supabase
+        .from('members')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('status', 'Invited')
+    ]);
 
     const activeProjectsCount = projectsData?.filter(p => p.status === 'Active').length || 0;
     
@@ -34,22 +55,7 @@ export async function GET(req: NextRequest) {
       priority: p.priority,
       end_date: p.end_date,
       manager_name: p.members ? `${(p.members as any).first_name} ${(p.members as any).last_name}` : 'Unassigned',
-      // We could calculate completion if we fetch features, but for speed we'll mock it or omit it
     }));
-
-    // 2. Members count
-    const { count: membersCount } = await supabase
-      .from('members')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', orgId)
-      .eq('status', 'Active');
-
-    // 3. Pending Invites
-    const { count: invitesCount } = await supabase
-      .from('members')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', orgId)
-      .eq('status', 'Invited');
 
     return NextResponse.json({
       stats: {

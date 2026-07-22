@@ -52,18 +52,18 @@ export default function WorkspaceDashboard() {
 
         {role === 'Organization Admin' && (
           <TabsContent value="org-overview" className="mt-0 outline-none">
-            <OrganizationOverview />
+            {tabValue === 'org-overview' && <OrganizationOverview />}
           </TabsContent>
         )}
 
         {(role === 'Organization Admin' || role === 'Project Manager') && (
           <TabsContent value="portfolio" className="mt-0 outline-none">
-            <ProjectPortfolio />
+            {tabValue === 'portfolio' && <ProjectPortfolio />}
           </TabsContent>
         )}
 
         <TabsContent value="my-workspace" className="mt-0 outline-none">
-          <MyWorkspace />
+          {tabValue === 'my-workspace' && <MyWorkspace />}
         </TabsContent>
       </Tabs>
     </div>

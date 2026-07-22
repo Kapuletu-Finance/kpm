@@ -39,6 +39,10 @@ export default function AcceptInvitePage() {
     setIsSubmitting(true);
     try {
       await resetMutation.mutateAsync({ password: data.password });
+      
+      // Update member status from 'Invited' to 'Active'
+      await fetch('/api/v1/auth/activate', { method: 'POST' });
+      
       toast.success('Account activated successfully');
       router.push('/workspace');
     } catch (error: any) {

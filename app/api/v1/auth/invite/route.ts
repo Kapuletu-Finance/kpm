@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     // 2. Fetch the caller's organization context
     const { data: callerMember, error: callerError } = await supabase
       .from('members')
-      .select('organization_id, organization_role')
+      .select('organization_id, organization_role, first_name, last_name, organizations(name)')
       .eq('id', user.id)
       .single();
 
@@ -50,9 +50,21 @@ export async function POST(request: Request) {
     // 3. Invite the user via Supabase Admin API
     // Note: redirectTo can be configured in Supabase dashboard or passed here.
     const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite`;
-    const { data: inviteData, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo
-    });
+    
+    // We pass custom data to the invite email template so we can personalize the email.
+    // In Supabase email templates, this can be accessed via {{ .Data.organization_name }}
+    const inviteOptions = {
+      redirectTo,
+      data: {
+        invited_role: role,
+        inviter_name: `${callerMember.first_name} ${callerMember.last_name}`.trim(),
+        organization_name: (Array.isArray(callerMember.organizations) ? callerMember.organizations[0]?.name : (callerMember.organizations as any)?.name) || 'your organization',
+      }
+    };
+    
+    console.log('Sending invite with options:', JSON.stringify(inviteOptions, null, 2));
+
+    const { data: inviteData, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, inviteOptions);
 
     if (inviteError) {
       return NextResponse.json({ error: inviteError.message }, { status: 400 });

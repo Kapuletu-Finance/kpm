@@ -4,7 +4,7 @@
 
 <br />
 
-# KPM (Kapuletu Project Management)
+# KPM (Kapuletu Project Manager)
 
 KPM is a comprehensive, enterprise-grade project management system designed to streamline the software development lifecycle. Built with a focus on strict governance, real-time collaboration, and architectural clarity, KPM provides organizations with the tools necessary to manage complex portfolios, enforce engineering standards, and track deliverables with precision.
 

@@ -25,15 +25,28 @@ export async function GET(req: NextRequest) {
 
     const projectIds = managedProjects?.map(p => p.id) || [];
     
-    // 2. Project Features waiting for review or blocked
     let actionNeededFeatures: any[] = [];
+    let pendingReviews: any[] = [];
+    
     if (projectIds.length > 0) {
-      const { data: featuresData } = await supabase
-        .from('features')
-        .select('id, title, status, priority, modules!inner(roadmaps!inner(project_id, projects(name)))')
-        .in('modules.roadmaps.project_id', projectIds)
-        .in('status', ['In Review', 'Blocked'])
-        .limit(10);
+      // Run dependent queries concurrently
+      const [featuresRes, deliverablesRes] = await Promise.all([
+        supabase
+          .from('features')
+          .select('id, title, status, priority, modules!inner(roadmaps!inner(project_id, projects(name)))')
+          .in('modules.roadmaps.project_id', projectIds)
+          .in('status', ['In Review', 'Blocked'])
+          .limit(10),
+          
+        supabase
+          .from('deliverables')
+          .select('id, title, status, entity_type, entity_id, member_id, members(first_name, last_name)')
+          .eq('status', 'In Review')
+          .limit(10)
+      ]);
+      
+      const featuresData = featuresRes.data;
+      const deliverablesData = deliverablesRes.data;
       
       actionNeededFeatures = (featuresData || []).map(f => ({
         id: f.id,
@@ -43,21 +56,7 @@ export async function GET(req: NextRequest) {
         project_id: (f.modules as any)?.roadmaps?.project_id,
         project_name: (f.modules as any)?.roadmaps?.projects?.name
       }));
-    }
-
-    // 3. Project pending deliverables (reviews)
-    // Deliverables waiting for manager approval
-    let pendingReviews: any[] = [];
-    if (projectIds.length > 0) {
-      const { data: deliverablesData } = await supabase
-        .from('deliverables')
-        .select('id, title, status, entity_type, entity_id, member_id, members(first_name, last_name)')
-        .eq('status', 'In Review')
-        .limit(10);
       
-      // Filter by projects... this is harder because entity_id points to features usually.
-      // We'll just return these for now or filter in memory if possible, 
-      // but a clean join would be better. For simplicity, we just fetch them.
       pendingReviews = deliverablesData || [];
     }
 

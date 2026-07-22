@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify your KPM Workspace</title>
+  <!-- Import Geist from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Global font declarations */
+    body, table, td, h1, h2, p, a {
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f3f4f6;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f3f4f6; padding: 40px 0;">
+    <tr>
+      <td align="center">
+        <!-- Main Email Container -->
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); overflow: hidden; border: 1px solid #e5e7eb;">
+          
+          <!-- Header Area -->
+          <tr>
+            <td align="center" style="padding: 40px 0 20px 0;">
+              <!-- Using KPM Primary Brand Color: #097255 -->
+              <h1 style="margin: 0; font-size: 32px; color: #097255; font-weight: 700; letter-spacing: -0.5px;">
+                KPM
+              </h1>
+              <p style="margin: 5px 0 0 0; font-size: 13px; color: #6b7280; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">
+                Kapuletu Project Manager
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Body Content Area -->
+          <tr>
+            <td style="padding: 20px 40px 40px 40px;">
+              <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #171717; font-weight: 600;">Secure Your Workspace</h2>
+              
+              <!-- Dynamic Greeting -->
+              <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #171717;">
+                Hello {{ .Data.full_name }},
+              </p>
+              
+              <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #171717;">
+                Thank you for choosing KPM. As an Organization Admin, you are one step away from unlocking your enterprise workspace. Once your email is verified, you will be able to configure global standards, provision projects, and securely invite your Project Managers and Team Members.
+              </p>
+
+              <p style="margin: 0 0 32px 0; font-size: 16px; line-height: 24px; color: #171717;">
+                Please authenticate your account by clicking the secure button below.
+              </p>
+              
+              <!-- Call to Action Button -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 32px;">
+                <tr>
+                  <td align="center">
+                    <!-- Button uses KPM Primary color #097255 -->
+                    <a href="{{ .ConfirmationURL }}" style="display: inline-block; background-color: #097255; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 600; padding: 14px 32px; border-radius: 6px; text-align: center;">
+                      Verify Email &amp; Initialize Workspace
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Fallback Link Section -->
+              <p style="margin: 0 0 12px 0; font-size: 14px; line-height: 22px; color: #6b7280;">
+                If the button above does not work, copy and paste this link securely into your web browser:
+              </p>
+              
+              <p style="margin: 0; font-size: 14px; line-height: 22px; word-break: break-all;">
+                <!-- Link uses KPM Secondary/Info color -->
+                <a href="{{ .ConfirmationURL }}" style="color: #1b4580; text-decoration: underline;">
+                  {{ .ConfirmationURL }}
+                </a>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer Area -->
+          <tr>
+            <td style="padding: 30px 40px; background-color: #f3f4f6; border-top: 1px solid #e5e7eb; text-align: center;">
+              <p style="margin: 0 0 8px 0; font-size: 13px; color: #6b7280; line-height: 1.5;">
+                This is an automated security message from Kapuletu Project Manager.<br/>If you did not initiate this registration, please safely ignore this email.
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #6b7280; font-weight: 500;">
+                &copy; 2026 KPM. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
