@@ -25,59 +25,55 @@ export default function WorkspaceSettingsPage() {
   const isOrgAdmin = memberProfile?.organization_role === 'Organization Admin';
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+    <div className="space-y-8">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
+        <h2 className="text-3xl font-bold tracking-tight text-foreground">Settings</h2>
         <p className="text-muted-foreground mt-2">
           Manage your personal profile {isOrgAdmin && 'and workspace configurations'}.
         </p>
       </div>
 
       <Tabs defaultValue="personal" className="w-full space-y-6">
-        <TabsList className="bg-muted border border-border/50">
-          <TabsTrigger value="personal" className="gap-2">
-            <UserCircle2 className="w-4 h-4" /> Personal Profile
+        <TabsList className={`bg-muted border border-border/50 grid w-full ${isOrgAdmin ? 'grid-cols-4' : 'grid-cols-1'} md:w-fit md:flex`}>
+          <TabsTrigger value="personal" className="flex items-center gap-2">
+            <UserCircle2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Personal Profile</span>
           </TabsTrigger>
           
           {isOrgAdmin && (
             <>
-              <TabsTrigger value="general" className="gap-2">
-                <Settings className="w-4 h-4" /> Organization Profile
+              <TabsTrigger value="general" className="flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Organization Profile</span>
               </TabsTrigger>
-              <TabsTrigger value="standards" className="gap-2">
-                <ShieldCheck className="w-4 h-4" /> Global Standards
+              <TabsTrigger value="standards" className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4" />
+                <span className="hidden sm:inline">Global Standards</span>
               </TabsTrigger>
-              <TabsTrigger value="danger" className="gap-2 text-destructive data-[state=active]:text-destructive">
-                <AlertTriangle className="w-4 h-4" /> Danger Zone
+              <TabsTrigger value="danger" className="flex items-center gap-2 text-destructive data-[state=active]:text-destructive">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="hidden sm:inline">Danger Zone</span>
               </TabsTrigger>
             </>
           )}
         </TabsList>
 
-        <TabsContent value="personal" className="m-0">
-          <div className="max-w-4xl">
-            <PersonalProfileForm />
-          </div>
+        <TabsContent value="personal" className="m-0 outline-none">
+          <PersonalProfileForm />
         </TabsContent>
 
         {isOrgAdmin && (
           <>
-            <TabsContent value="general" className="m-0">
-              <div className="max-w-4xl">
-                <GeneralSettingsForm organization={organization} />
-              </div>
+            <TabsContent value="general" className="m-0 outline-none">
+              <GeneralSettingsForm organization={organization} />
             </TabsContent>
 
-            <TabsContent value="standards" className="m-0">
-              <div className="max-w-4xl">
-                <StandardsForm standards={standards} />
-              </div>
+            <TabsContent value="standards" className="m-0 outline-none">
+              <StandardsForm standards={standards} />
             </TabsContent>
 
-            <TabsContent value="danger" className="m-0">
-              <div className="max-w-4xl">
-                <DangerZone organization={organization} />
-              </div>
+            <TabsContent value="danger" className="m-0 outline-none">
+              <DangerZone organization={organization} />
             </TabsContent>
           </>
         )}

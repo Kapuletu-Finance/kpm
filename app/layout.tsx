@@ -13,8 +13,42 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KPM by Kapuletu",
-  description: "Enterprise Project Management System",
+  title: {
+    template: "%s | KPM - Kapuletu Project Management",
+    default: "KPM - Enterprise Project Management System",
+  },
+  description: "Enterprise Project Management System for modern software teams. Manage projects, sprints, and engineering standards with seamless RBAC and beautiful UI.",
+  keywords: ["project management", "kapuletu", "enterprise", "sprints", "software development", "collaboration"],
+  authors: [{ name: "Kapuletu" }],
+  creator: "Kapuletu",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://kpm.kapuletu.com",
+    title: "KPM - Enterprise Project Management System",
+    description: "Enterprise Project Management System for modern software teams.",
+    siteName: "KPM",
+    images: [
+      {
+        url: "/logos/kpm/kpm-primary-black.svg",
+        width: 1200,
+        height: 630,
+        alt: "KPM Logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "KPM - Enterprise Project Management System",
+    description: "Enterprise Project Management System for modern software teams.",
+    images: ["/logos/kpm/kpm-primary-black.svg"],
+    creator: "@kapuletu",
+  },
+  icons: {
+    icon: "/logos/kpm/kpm-icon.svg",
+    shortcut: "/logos/kpm/kpm-icon.svg",
+    apple: "/logos/kpm/kpm-icon.svg",
+  },
 };
 
 import QueryProvider from "@/lib/react-query/QueryProvider";
