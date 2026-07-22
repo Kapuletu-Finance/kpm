@@ -230,7 +230,7 @@ export async function POST(
         member_id: targetMemberId,
         project_role: project_role,
         functional_role: functional_role || null,
-        role_responsibilities: role_responsibilities ? JSON.stringify(role_responsibilities) : '[]',
+        role_responsibilities: role_responsibilities || [],
         review_authority: review_authority
       })
       .select()

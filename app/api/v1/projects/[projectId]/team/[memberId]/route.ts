@@ -61,7 +61,7 @@ export async function PATCH(
     const updates: any = {};
     if (result.data.project_role !== undefined) updates.project_role = result.data.project_role;
     if (result.data.functional_role !== undefined) updates.functional_role = result.data.functional_role;
-    if (result.data.role_responsibilities !== undefined) updates.role_responsibilities = JSON.stringify(result.data.role_responsibilities);
+    if (result.data.role_responsibilities !== undefined) updates.role_responsibilities = result.data.role_responsibilities;
     if (result.data.review_authority !== undefined) updates.review_authority = result.data.review_authority;
 
     const { data: updatedMember, error: updateError } = await supabase

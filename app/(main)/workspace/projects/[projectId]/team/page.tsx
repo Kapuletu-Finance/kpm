@@ -5,10 +5,11 @@ import { useState } from 'react';
 import { useAuth } from '@/store/AuthContext';
 import { useProjectTeam, useRemoveProjectMember, useUpdateProjectMember } from '@/hooks/useProjectTeam';
 import { AddTeamMemberDialog } from '@/components/projects/AddTeamMemberDialog';
+import { EditTeamMemberDialog } from '@/components/projects/EditTeamMemberDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Plus, ShieldCheck, Shield, Trash2, Edit } from 'lucide-react';
+import { Users, Plus, ShieldCheck, Shield, Trash2, Edit, Clock } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 
@@ -20,6 +21,7 @@ export default function ProjectTeamPage({ params }: { params: Promise<{ projectI
   const updateMutation = useUpdateProjectMember(projectId);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<any>(null);
 
   if (isLoading) {
     return <div className="animate-pulse space-y-6">
@@ -75,7 +77,7 @@ export default function ProjectTeamPage({ params }: { params: Promise<{ projectI
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 mb-6">
+      <div className="grid gap-4 md:grid-cols-4 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Team Members</CardTitle>
@@ -101,6 +103,15 @@ export default function ProjectTeamPage({ params }: { params: Promise<{ projectI
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{teamMembers?.filter((m: any) => m.review_authority).length || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Invites</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{teamMembers?.filter((m: any) => m.members?.status === 'Invited').length || 0}</div>
           </CardContent>
         </Card>
       </div>
@@ -179,6 +190,14 @@ export default function ProjectTeamPage({ params }: { params: Promise<{ projectI
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => setEditingMember(member)}
+                            title="Edit Role & Responsibilities"
+                          >
+                            <Edit className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleRemove(member.member_id)}
                             disabled={removeMutation.isPending || (member.project_role === 'Project Manager' && member.member_id === memberProfile?.id)}
                             title="Remove from Project"
@@ -209,6 +228,15 @@ export default function ProjectTeamPage({ params }: { params: Promise<{ projectI
         projectId={projectId} 
         open={isAddOpen} 
         onOpenChange={setIsAddOpen} 
+      />
+
+      <EditTeamMemberDialog
+        projectId={projectId}
+        member={editingMember}
+        open={!!editingMember}
+        onOpenChange={(open) => {
+          if (!open) setEditingMember(null);
+        }}
       />
     </div>
   );
