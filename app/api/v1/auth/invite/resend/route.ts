@@ -3,9 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 
-const inviteSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  role: z.enum(['Project Manager', 'Member']),
+const resendSchema = z.object({
+  memberId: z.string().uuid('Invalid member ID'),
 });
 
 export async function POST(request: Request) {
@@ -31,11 +30,11 @@ export async function POST(request: Request) {
 
     // Ensure caller has permission to invite (Org Admin only)
     if (callerMember.organization_role !== 'Organization Admin') {
-      return NextResponse.json({ error: 'Insufficient permissions to invite members' }, { status: 403 });
+      return NextResponse.json({ error: 'Insufficient permissions to resend invites' }, { status: 403 });
     }
 
     const body = await request.json();
-    const result = inviteSchema.safeParse(body);
+    const result = resendSchema.safeParse(body);
 
     if (!result.success) {
       return NextResponse.json(
@@ -44,13 +43,31 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email, role } = result.data;
+    const { memberId } = result.data;
     const adminSupabase = createAdminClient(); // Bypasses RLS
 
-    // 3. Invite the user via Supabase Admin API
-    // Note: redirectTo can be configured in Supabase dashboard or passed here.
+    // 3. Verify target member belongs to the caller's organization and is in 'Invited' status
+    const { data: targetMember, error: targetError } = await adminSupabase
+      .from('members')
+      .select('email, status, organization_id')
+      .eq('id', memberId)
+      .single();
+
+    if (targetError || !targetMember) {
+      return NextResponse.json({ error: 'Target member not found' }, { status: 404 });
+    }
+
+    if (targetMember.organization_id !== callerMember.organization_id) {
+      return NextResponse.json({ error: 'Target member not in your organization' }, { status: 403 });
+    }
+
+    if (targetMember.status !== 'Invited') {
+      return NextResponse.json({ error: 'Can only resend invitations to pending members' }, { status: 400 });
+    }
+
+    // 4. Resend the invite via Supabase Admin API
     const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite`;
-    const { data: inviteData, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
+    const { error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(targetMember.email, {
       redirectTo
     });
 
@@ -58,36 +75,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: inviteError.message }, { status: 400 });
     }
 
-    const invitedUser = inviteData.user;
-    if (!invitedUser) {
-      return NextResponse.json({ error: 'Failed to generate invite' }, { status: 500 });
-    }
-
-    // 4. Create the member record in the 'Invited' state
-    const { error: memberError } = await adminSupabase
+    // 5. Update the invited_at timestamp
+    const { error: updateError } = await adminSupabase
       .from('members')
-      .insert({
-        id: invitedUser.id,
-        organization_id: callerMember.organization_id,
-        first_name: 'Pending',
-        last_name: 'User',
-        email: email,
-        organization_role: role,
-        status: 'Invited',
-        invited_at: new Date().toISOString(),
-      });
+      .update({ invited_at: new Date().toISOString() })
+      .eq('id', memberId);
 
-    if (memberError) {
-      console.error('Member insert error:', memberError);
-      return NextResponse.json({ error: 'Failed to create member record' }, { status: 500 });
+    if (updateError) {
+      console.error('Failed to update invited_at timestamp:', updateError);
+      // We don't fail the request here, as the invite was already sent successfully
     }
 
     return NextResponse.json({
-      message: 'Invitation sent successfully',
-      user: invitedUser,
+      message: 'Invitation resent successfully',
     });
   } catch (err: any) {
-    console.error('Invite exception:', err);
+    console.error('Resend Invite exception:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

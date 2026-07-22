@@ -7,9 +7,12 @@ import {
   DropdownMenuContent, 
   DropdownMenuItem, 
   DropdownMenuLabel, 
+  DropdownMenuGroup,
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
+import { SidebarNavContent } from '@/components/layout/Sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useRouter } from 'next/navigation';
 import { Search, Menu } from 'lucide-react';
@@ -39,11 +42,20 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-10 flex h-16 flex-shrink-0 items-center gap-x-4 border-b border-border bg-background px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
-      {/* Mobile Menu Trigger Placeholder */}
-      <button type="button" className="-m-2.5 p-2.5 text-muted-foreground lg:hidden">
-        <span className="sr-only">Open sidebar</span>
-        <Menu className="h-6 w-6" aria-hidden="true" />
-      </button>
+      {/* Mobile Menu */}
+      <Sheet>
+        <SheetTrigger render={
+          <button type="button" className="-m-2.5 p-2.5 text-muted-foreground lg:hidden">
+            <span className="sr-only">Open sidebar</span>
+            <Menu className="h-6 w-6" aria-hidden="true" />
+          </button>
+        } />
+        <SheetContent side="left" className="w-64 p-0 bg-secondary text-secondary-foreground border-none">
+          <div className="flex flex-col h-full">
+            <SidebarNavContent />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Separator for mobile */}
       <div className="h-6 w-px bg-border lg:hidden" aria-hidden="true" />
@@ -87,15 +99,17 @@ export function Header() {
               }
             />
             <DropdownMenuContent align="end" className="w-56 mt-2">
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{memberProfile?.first_name} {memberProfile?.last_name}</p>
-                  <p className="text-xs leading-none text-muted-foreground mt-1">{user?.email}</p>
-                  <p className={`text-xs font-semibold leading-none mt-2 ${roleColor}`}>
-                    {memberProfile?.organization_role || 'Member'}
-                  </p>
-                </div>
-              </DropdownMenuLabel>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{memberProfile?.first_name} {memberProfile?.last_name}</p>
+                    <p className="text-xs leading-none text-muted-foreground mt-1">{user?.email}</p>
+                    <p className={`text-xs font-semibold leading-none mt-2 ${roleColor}`}>
+                      {memberProfile?.organization_role || 'Member'}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+              </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => router.push('/workspace/profile')}>
                 My Profile

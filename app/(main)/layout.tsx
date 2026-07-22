@@ -9,7 +9,7 @@ export default function WorkspaceLayout({ children }: { children: ReactNode }) {
       <div className="flex flex-1 flex-col lg:pl-64 h-full overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+          <div className="flex-1 w-full p-4 sm:p-6 lg:p-8">
             {children}
           </div>
         </main>

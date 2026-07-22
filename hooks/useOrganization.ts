@@ -70,3 +70,26 @@ export function useInviteMember() {
     },
   });
 }
+
+export function useResendInviteMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (memberId: string) => {
+      const response = await fetch('/api/v1/auth/invite/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to resend invite');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization', 'members'] });
+    },
+  });
+}

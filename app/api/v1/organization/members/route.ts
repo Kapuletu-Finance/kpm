@@ -21,18 +21,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Member profile not found' }, { status: 404 });
     }
 
-    // We use the admin client because standard users might not have RLS permission to read ALL members,
-    // wait, RLS on members table should allow read if organization_id matches. Let's rely on adminClient to be safe 
-    // for this read, or we could just use standard client. We'll use standard client assuming RLS is set up properly for reads.
-    // If RLS fails, we fallback to admin for now, or just use standard. Let's use standard.
-    const { data: members, error: membersError } = await supabase
-      .from('members')
-      .select('*')
-      .eq('organization_id', member.organization_id)
-      .order('created_at', { ascending: false });
+    // We use the admin client because the RPC function `get_org_members_with_auth` uses SECURITY DEFINER
+    // and returns `last_sign_in_at` from the auth schema.
+    const adminSupabase = createAdminClient();
+    const { data: members, error: membersError } = await adminSupabase
+      .rpc('get_org_members_with_auth', { org_id: member.organization_id });
 
     if (membersError) {
-      return NextResponse.json({ error: membersError.message }, { status: 400 });
+      // Fallback to standard members query if the migration hasn't been applied yet
+      const { data: fallbackMembers, error: fallbackError } = await supabase
+        .from('members')
+        .select('*')
+        .eq('organization_id', member.organization_id)
+        .order('created_at', { ascending: false });
+        
+      if (fallbackError) {
+        return NextResponse.json({ error: fallbackError.message }, { status: 400 });
+      }
+      return NextResponse.json(fallbackMembers);
     }
 
     return NextResponse.json(members);

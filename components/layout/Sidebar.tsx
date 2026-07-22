@@ -24,11 +24,11 @@ const navItems = [
   { name: 'Collaboration', href: '/workspace/collaboration', icon: MessageSquare },
 ];
 
-export function Sidebar() {
+export function SidebarNavContent() {
   const pathname = usePathname();
 
   return (
-    <div className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-secondary text-secondary-foreground">
+    <>
       {/* Logo Area */}
       <div className="flex items-center h-16 flex-shrink-0 px-6 border-b border-white/10">
         <Link href="/workspace">
@@ -83,6 +83,14 @@ export function Sidebar() {
           Settings
         </Link>
       </div>
+    </>
+  );
+}
+
+export function Sidebar() {
+  return (
+    <div className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-secondary text-secondary-foreground">
+      <SidebarNavContent />
     </div>
   );
 }
