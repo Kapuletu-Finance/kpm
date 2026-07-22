@@ -256,7 +256,7 @@ export function EditProjectDialog({ project, open, onOpenChange }: EditProjectDi
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Project Manager</Label>
           <Select
@@ -297,7 +297,7 @@ export function EditProjectDialog({ project, open, onOpenChange }: EditProjectDi
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Status</Label>
           <Select
@@ -321,7 +321,7 @@ export function EditProjectDialog({ project, open, onOpenChange }: EditProjectDi
         <div className="space-y-2" />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="edit-start">Start Date</Label>
           <Input id="edit-start" type="date" {...register('start_date')} />

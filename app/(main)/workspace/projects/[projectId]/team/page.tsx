@@ -57,7 +57,7 @@ export default function ProjectTeamPage({ params }: { params: Promise<{ projectI
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Users className="w-6 h-6 text-primary" />
@@ -113,7 +113,8 @@ export default function ProjectTeamPage({ params }: { params: Promise<{ projectI
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <div className="overflow-x-auto overflow-y-hidden">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Member</TableHead>
@@ -199,7 +200,8 @@ export default function ProjectTeamPage({ params }: { params: Promise<{ projectI
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 

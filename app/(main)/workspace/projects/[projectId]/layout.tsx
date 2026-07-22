@@ -118,7 +118,7 @@ export default function ProjectLayout({
 
         {/* Manager / Admin action buttons */}
         {isManagerOrAdmin && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 w-full md:w-auto">
             <Button
               variant="outline"
               size="sm"
@@ -182,7 +182,7 @@ export default function ProjectLayout({
       </div>
 
       <div className="border-b border-border">
-        <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
+        <nav className="-mb-px flex space-x-4 md:space-x-8 overflow-x-auto pb-1 scrollbar-thin" aria-label="Tabs">
           {tabs.map((tab) => {
             const isActive = pathname === tab.href;
             const Icon = tab.icon;

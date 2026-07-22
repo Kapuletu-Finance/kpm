@@ -204,7 +204,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {memberProfile?.organization_role === 'Organization Admin' && (
           <div className="space-y-2">
             <Label htmlFor="project_manager_id">Project Manager</Label>
@@ -244,7 +244,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="start_date">Start Date</Label>
           <Input id="start_date" type="date" {...register('start_date')} />
