@@ -89,13 +89,7 @@ export default function OrganizationPage() {
     <div className="space-y-8">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Building2 className="h-8 w-8 text-primary" />
-            Organization Settings
-          </h2>
-          <p className="text-muted-foreground mt-2">
-            Manage your workspace members, roles, and overall access.
-          </p>
+          {/* Header moved to layout */}
         </div>
 
         {isOrgAdmin && (

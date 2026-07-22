@@ -24,13 +24,7 @@ export default function OrganizationActivityPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-6 space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Organization Audit Logs</h2>
-        <p className="text-muted-foreground">
-          Workspace-wide activity log of all actions taken across all projects.
-        </p>
-      </div>
+    <div className="max-w-4xl py-2 space-y-6">
 
       <div className="bg-background rounded-xl border shadow-sm p-6">
         <ActivityTimeline logs={data?.data || []} />
