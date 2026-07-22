@@ -1,8 +1,9 @@
 'use client';
 
 import { useProject } from '@/hooks/useProjects';
+import { useProjectTeam } from '@/hooks/useProjectTeam';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Target, Users, TrendingUp, FileText, Image as ImageIcon, ExternalLink, Calendar, Flag } from 'lucide-react';
+import { Target, Users, TrendingUp, FileText, Image as ImageIcon, ExternalLink, Calendar, Flag, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 const Github = ({ className }: { className?: string }) => (
@@ -29,6 +30,7 @@ import Link from 'next/link';
 export default function ProjectOverviewPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = use(params);
   const { data: project, isLoading } = useProject(projectId);
+  const { data: teamMembers } = useProjectTeam(projectId);
 
   if (isLoading || !project) return null;
 
@@ -219,6 +221,68 @@ export default function ProjectOverviewPage({ params }: { params: Promise<{ proj
 
             </CardContent>
           </Card>
+        {/* Team Members */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" />
+                  Team
+                </CardTitle>
+                <CardDescription>
+                  {teamMembers?.length ?? 0} member{teamMembers?.length !== 1 ? 's' : ''} assigned
+                </CardDescription>
+              </div>
+              <Link
+                href={`/workspace/projects/${projectId}/team`}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                Manage <ExternalLink className="w-3 h-3" />
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              {!teamMembers || teamMembers.length === 0 ? (
+                <div className="px-6 pb-4 text-sm text-muted-foreground italic">
+                  No team members assigned yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {teamMembers.map((member: any) => (
+                    <div key={member.id} className="flex items-center justify-between px-6 py-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Avatar */}
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs shrink-0">
+                          {member.members?.first_name?.[0]}{member.members?.last_name?.[0]}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">
+                            {member.members?.first_name} {member.members?.last_name}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {member.functional_role || 'General Contributor'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {member.review_authority && (
+                          <span title="Review Authority">
+                            <ShieldCheck className="w-3.5 h-3.5 text-success" />
+                          </span>
+                        )}
+                        <Badge
+                          variant={member.project_role === 'Project Manager' ? 'default' : 'secondary'}
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          {member.project_role}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
         </div>
 
       </div>

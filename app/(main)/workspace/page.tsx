@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/store/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MyWorkspace } from '@/components/dashboard/MyWorkspace';
@@ -10,13 +11,22 @@ export default function WorkspaceDashboard() {
   const { memberProfile } = useAuth();
   const role = memberProfile?.organization_role;
 
-  // Determine default tab based on role
-  let defaultTab = 'my-workspace';
-  if (role === 'Organization Admin') {
-    defaultTab = 'org-overview';
-  } else if (role === 'Project Manager') {
-    defaultTab = 'portfolio';
-  }
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+
+  // Set the initial tab once role is known, then leave it to user interaction
+  useEffect(() => {
+    if (role === undefined || activeTab !== null) return;
+    if (role === 'Organization Admin') {
+      setActiveTab('org-overview');
+    } else if (role === 'Project Manager') {
+      setActiveTab('portfolio');
+    } else {
+      setActiveTab('my-workspace');
+    }
+  }, [role, activeTab]);
+
+  // While role is unknown, fall back to 'my-workspace' so Tabs always has a value
+  const tabValue = activeTab ?? 'my-workspace';
 
   return (
     <div className="space-y-8">
@@ -29,7 +39,7 @@ export default function WorkspaceDashboard() {
         </p>
       </div>
 
-      <Tabs defaultValue={defaultTab} className="w-full space-y-6">
+      <Tabs value={tabValue} onValueChange={setActiveTab} className="w-full space-y-6">
         <TabsList className="bg-muted border border-border/50">
           {role === 'Organization Admin' && (
             <TabsTrigger value="org-overview">Organization Overview</TabsTrigger>

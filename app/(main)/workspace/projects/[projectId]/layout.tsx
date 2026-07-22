@@ -1,13 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { use } from 'react';
 import Link from 'next/link';
-import { useProject } from '@/hooks/useProjects';
+import { useProject, useUpdateProject } from '@/hooks/useProjects';
 import { useAuth } from '@/store/AuthContext';
-import { Loader2, ArrowLeft, LayoutDashboard, Users, Route, Settings2, Timer, MessageSquare, Video, FolderOpen, Rocket, Activity } from 'lucide-react';
+import { Loader2, ArrowLeft, LayoutDashboard, Users, Route, Settings2, Timer, MessageSquare, Video, FolderOpen, Rocket, Activity, Pencil, PauseCircle } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { EditProjectDialog } from '@/components/projects/EditProjectDialog';
+import { toast } from 'sonner';
 
 export default function ProjectLayout({
   children,
@@ -20,6 +24,9 @@ export default function ProjectLayout({
   const { projectId } = use(params);
   const { data: project, isLoading, error } = useProject(projectId);
   const { memberProfile } = useAuth();
+  const updateMutation = useUpdateProject();
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -41,9 +48,34 @@ export default function ProjectLayout({
     );
   }
 
-  const isManagerOrAdmin = 
-    memberProfile?.organization_role === 'Organization Admin' || 
+  const isManagerOrAdmin =
+    memberProfile?.organization_role === 'Organization Admin' ||
     project.project_manager_id === memberProfile?.id;
+
+  // Lifecycle actions available based on current status
+  const canPublish = isManagerOrAdmin && (project.status === 'Draft' || project.status === 'Planning');
+  const canPutOnHold = isManagerOrAdmin && project.status === 'Active';
+  const canReactivate = isManagerOrAdmin && project.status === 'On Hold';
+
+  const handlePublish = () => {
+    updateMutation.mutate(
+      { id: project.id, status: 'Active' },
+      {
+        onSuccess: () => toast.success(`${project.name} is now live`),
+        onError: (err: any) => toast.error(err.message || 'Failed to publish project'),
+      }
+    );
+  };
+
+  const handleHold = () => {
+    updateMutation.mutate(
+      { id: project.id, status: 'On Hold' },
+      {
+        onSuccess: () => toast.success(`${project.name} has been put on hold`),
+        onError: (err: any) => toast.error(err.message || 'Failed to update project'),
+      }
+    );
+  };
 
   const tabs = [
     { name: 'Overview', href: `/workspace/projects/${project.id}`, icon: LayoutDashboard },
@@ -83,10 +115,74 @@ export default function ProjectLayout({
             {project.description}
           </p>
         </div>
+
+        {/* Manager / Admin action buttons */}
+        {isManagerOrAdmin && (
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setIsEditOpen(true)}
+            >
+              <Pencil className="w-4 h-4" />
+              Edit
+            </Button>
+
+            {canPublish && (
+              <Button
+                size="sm"
+                className="gap-2"
+                disabled={updateMutation.isPending}
+                onClick={handlePublish}
+              >
+                {updateMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Rocket className="w-4 h-4" />
+                )}
+                Publish Project
+              </Button>
+            )}
+
+            {canPutOnHold && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-2"
+                disabled={updateMutation.isPending}
+                onClick={handleHold}
+              >
+                {updateMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <PauseCircle className="w-4 h-4" />
+                )}
+                Put on Hold
+              </Button>
+            )}
+
+            {canReactivate && (
+              <Button
+                size="sm"
+                className="gap-2"
+                disabled={updateMutation.isPending}
+                onClick={handlePublish}
+              >
+                {updateMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Rocket className="w-4 h-4" />
+                )}
+                Reactivate
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="border-b border-border">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+        <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
           {tabs.map((tab) => {
             const isActive = pathname === tab.href;
             const Icon = tab.icon;
@@ -96,8 +192,8 @@ export default function ProjectLayout({
                 href={tab.href}
                 className={`
                   whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors
-                  ${isActive 
-                    ? 'border-primary text-primary' 
+                  ${isActive
+                    ? 'border-primary text-primary'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                   }
                 `}
@@ -113,6 +209,15 @@ export default function ProjectLayout({
       <div className="py-4">
         {children}
       </div>
+
+      {/* Edit dialog mounted at layout level so it works across all sub-pages */}
+      {isEditOpen && (
+        <EditProjectDialog
+          project={project}
+          open={isEditOpen}
+          onOpenChange={setIsEditOpen}
+        />
+      )}
     </div>
   );
 }

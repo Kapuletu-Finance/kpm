@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useUpdateProject } from '@/hooks/useProjects';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const generalSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
@@ -45,7 +46,13 @@ export function GeneralSettingsForm({ project }: { project: any }) {
   });
 
   const onSubmit = (data: GeneralFormValues) => {
-    updateMutation.mutate({ id: project.id, ...data });
+    updateMutation.mutate(
+      { id: project.id, ...data },
+      {
+        onSuccess: () => toast.success('Project settings saved'),
+        onError: (err: any) => toast.error(err.message || 'Failed to save settings'),
+      }
+    );
   };
 
   return (

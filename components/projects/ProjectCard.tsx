@@ -1,11 +1,26 @@
 import Link from 'next/link';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FolderKanban, Calendar, ArrowRight } from 'lucide-react';
+import { FolderKanban, Calendar, ArrowRight, MoreHorizontal, Pencil, Rocket, PauseCircle } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-export function ProjectCard({ project }: { project: any }) {
+interface ProjectCardProps {
+  project: any;
+  canManage?: boolean;
+  onEdit?: (project: any) => void;
+  onPublish?: (project: any) => void;
+  onHold?: (project: any) => void;
+}
+
+export function ProjectCard({ project, canManage, onEdit, onPublish, onHold }: ProjectCardProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Active': return 'bg-success/10 text-success border-success/20';
@@ -27,6 +42,11 @@ export function ProjectCard({ project }: { project: any }) {
     }
   };
 
+  // Which status transitions are available for this project
+  const canPublish = canManage && (project.status === 'Draft' || project.status === 'Planning');
+  const canPutOnHold = canManage && project.status === 'Active';
+  const canReactivate = canManage && project.status === 'On Hold';
+
   return (
     <Card className="flex flex-col hover:border-primary/50 transition-colors group">
       <CardHeader className="pb-4">
@@ -34,9 +54,62 @@ export function ProjectCard({ project }: { project: any }) {
           <div className="p-2 bg-primary/10 rounded-lg shrink-0">
             <FolderKanban className="w-5 h-5 text-primary" />
           </div>
-          <Badge variant="outline" className={getStatusColor(project.status)}>
-            {project.status}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className={getStatusColor(project.status)}>
+              {project.status}
+            </Badge>
+            {canManage && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                  <span className="sr-only">Project actions</span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onClick={() => onEdit?.(project)} className="gap-2 cursor-pointer">
+                    <Pencil className="w-4 h-4" />
+                    Edit Project
+                  </DropdownMenuItem>
+
+                  {(canPublish || canPutOnHold || canReactivate) && (
+                    <DropdownMenuSeparator />
+                  )}
+
+                  {canPublish && (
+                    <DropdownMenuItem
+                      onClick={() => onPublish?.(project)}
+                      className="gap-2 cursor-pointer text-success focus:text-success"
+                    >
+                      <Rocket className="w-4 h-4" />
+                      Publish Project
+                    </DropdownMenuItem>
+                  )}
+
+                  {canPutOnHold && (
+                    <DropdownMenuItem
+                      onClick={() => onHold?.(project)}
+                      className="gap-2 cursor-pointer text-accent focus:text-accent"
+                    >
+                      <PauseCircle className="w-4 h-4" />
+                      Put on Hold
+                    </DropdownMenuItem>
+                  )}
+
+                  {canReactivate && (
+                    <DropdownMenuItem
+                      onClick={() => onPublish?.(project)}
+                      className="gap-2 cursor-pointer text-success focus:text-success"
+                    >
+                      <Rocket className="w-4 h-4" />
+                      Reactivate
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </div>
         <h3 className="font-semibold text-lg line-clamp-1 group-hover:text-primary transition-colors">
           {project.name}

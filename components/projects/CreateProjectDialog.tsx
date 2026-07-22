@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { useCreateProject } from '@/hooks/useProjects';
 import { useMembers } from '@/hooks/useOrganization';
 import { useAuth } from '@/store/AuthContext';
-import { Loader2, Plus, Trash2, ArrowRight, ArrowLeft, Target, Link as LinkIcon, FolderKanban } from 'lucide-react';
+import { Loader2, Plus, Trash2, ArrowRight, ArrowLeft, Target, Link as LinkIcon, FolderKanban, Info } from 'lucide-react';
 
 import {
   Dialog,
@@ -61,6 +61,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     trigger,
     setValue,
     watch,
+    getValues,
   } = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
@@ -88,6 +89,19 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   });
 
   const priorityValue = watch('priority');
+  const pmIdValue = watch('project_manager_id') || memberProfile?.id;
+
+  // Resolve PM display name from loaded members or the current user (default PM)
+  const pmDisplayName = (() => {
+    if (!pmIdValue) return null;
+    const fromList = members?.find((m: any) => m.id === pmIdValue);
+    if (fromList) return `${fromList.first_name} ${fromList.last_name}${fromList.id === memberProfile?.id ? ' (You)' : ''}`;
+    // Fallback: current user is the default PM before members list loads
+    if (pmIdValue === memberProfile?.id && memberProfile) {
+      return `${memberProfile.first_name} ${memberProfile.last_name} (You)`;
+    }
+    return null;
+  })();
 
   const onNext = async () => {
     let isValid = false;
@@ -106,23 +120,49 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     setStep(step - 1);
   };
 
+  const doCreate = async (data: ProjectFormValues) => {
+    const payload = {
+      ...data,
+      business_goals: data.business_goals?.map((g) => g.value).filter(Boolean),
+      target_users: data.target_users?.map((u) => u.value).filter(Boolean),
+      success_metrics: data.success_metrics?.map((m) => m.value).filter(Boolean),
+    };
+
+    await createMutation.mutateAsync(payload);
+    toast.success('Project created successfully');
+    reset();
+    setStep(1);
+    onOpenChange(false);
+  };
+
   const onSubmit = async (data: ProjectFormValues) => {
     try {
-      // Map array of objects back to array of strings
-      const payload = {
-        ...data,
-        business_goals: data.business_goals?.map((g) => g.value).filter(Boolean),
-        target_users: data.target_users?.map((u) => u.value).filter(Boolean),
-        success_metrics: data.success_metrics?.map((m) => m.value).filter(Boolean),
-      };
-
-      await createMutation.mutateAsync(payload);
-      toast.success('Project created successfully');
-      reset();
-      setStep(1);
-      onOpenChange(false);
+      await doCreate(data);
     } catch (error: any) {
       toast.error(error.message || 'Failed to create project');
+    }
+  };
+
+  // "Create without links" — skips link validation, creates with current values
+  const onCreateWithoutLinks = async () => {
+    try {
+      const data = getValues();
+      // Clear any link fields so there are no URL validation errors
+      data.github_repository = '';
+      data.figma_url = '';
+      data.swagger_url = '';
+      await doCreate(data);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create project');
+    }
+  };
+
+  // Prevent Enter key from triggering implicit form submission on steps 1 and 2.
+  // HTML forms submit on Enter in any text input when a submit button exists anywhere
+  // in the form tree — this guard blocks that on non-final steps.
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'Enter' && step < 3) {
+      e.preventDefault();
     }
   };
 
@@ -137,24 +177,26 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
 
       <div className="space-y-2">
         <Label htmlFor="description">Short Description</Label>
-        <Textarea 
-          id="description" 
-          placeholder="Briefly describe the purpose of this project..." 
-          {...register('description')} 
-          className="resize-none" 
-          rows={3} 
+        <Textarea
+          id="description"
+          placeholder="Briefly describe the purpose of this project..."
+          {...register('description')}
+          className="resize-none"
+          rows={3}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="project_manager_id">Project Manager</Label>
-          <Select 
-            value={watch('project_manager_id') || memberProfile?.id} 
+          <Select
+            value={pmIdValue}
             onValueChange={(val: any) => setValue('project_manager_id', val)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select a manager" />
+              <SelectValue placeholder="Select a manager">
+                {pmDisplayName}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {members?.filter((m: any) => m.organization_role !== 'Member').map((m: any) => (
@@ -241,27 +283,27 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   const renderStep2 = () => (
     <div className="space-y-8 py-6 animate-in fade-in slide-in-from-right-4">
       {renderDynamicList(
-        'Business Goals', 
-        'What strategic outcomes does this project aim to achieve?', 
-        goalFields, appendGoal, removeGoal, 'business_goals', 
+        'Business Goals',
+        'What strategic outcomes does this project aim to achieve?',
+        goalFields, appendGoal, removeGoal, 'business_goals',
         'e.g., Increase conversion rate by 15%'
       )}
-      
+
       <hr className="border-border/50" />
 
       {renderDynamicList(
-        'Target Users', 
-        'Who are we building this for?', 
-        userFields, appendUser, removeUser, 'target_users', 
+        'Target Users',
+        'Who are we building this for?',
+        userFields, appendUser, removeUser, 'target_users',
         'e.g., Internal Support Team'
       )}
 
       <hr className="border-border/50" />
 
       {renderDynamicList(
-        'Success Metrics', 
-        'How will we measure success?', 
-        metricFields, appendMetric, removeMetric, 'success_metrics', 
+        'Success Metrics',
+        'How will we measure success?',
+        metricFields, appendMetric, removeMetric, 'success_metrics',
         'e.g., < 1s API response time'
       )}
     </div>
@@ -270,6 +312,16 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   // Render Step 3
   const renderStep3 = () => (
     <div className="space-y-6 py-6 animate-in fade-in slide-in-from-right-4">
+
+      {/* Helper callout — reassures user links are optional and editable later */}
+      <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+        <Info className="w-4 h-4 mt-0.5 shrink-0" />
+        <p>
+          All links are <strong>optional</strong> and can be added or changed at any time from{' '}
+          <strong>Project Settings → Integrations</strong>.
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="github_repository">GitHub Repository URL</Label>
         <Input id="github_repository" type="url" placeholder="https://github.com/..." {...register('github_repository')} />
@@ -312,14 +364,25 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
               {step === 3 && <><LinkIcon className="text-primary w-6 h-6" /> Resources</>}
             </DialogTitle>
             <DialogDescription>
-              Step {step} of 3. {step === 1 && 'Let\'s start with the operational details.'}
+              Step {step} of 3.{' '}
+              {step === 1 && "Let's start with the operational details."}
               {step === 2 && 'Define the purpose and scope of the project.'}
-              {step === 3 && 'Link external tools and repositories.'}
+              {step === 3 && 'Optionally link external tools and repositories.'}
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+        {/*
+          onKeyDown guard: prevents the browser's implicit form submission when
+          the user presses Enter on any text field in steps 1 or 2.
+          Without this, pressing Enter in a URL input on step 3 (or any input on
+          earlier steps that triggers submit) fires onSubmit prematurely.
+        */}
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          onKeyDown={handleFormKeyDown}
+          className="flex flex-col flex-1 overflow-hidden"
+        >
           <div className="flex-1 overflow-y-auto px-6">
             {step === 1 && renderStep1()}
             {step === 2 && renderStep2()}
@@ -332,19 +395,34 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
                 <ArrowLeft className="w-4 h-4 mr-2" /> Back
               </Button>
             ) : (
-              <div></div> // Spacer
+              <div /> // Spacer
             )}
-            
-            {step < 3 ? (
-              <Button type="button" onClick={onNext}>
-                Next <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            ) : (
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Create Project
-              </Button>
-            )}
+
+            <div className="flex items-center gap-3">
+              {/* Step 3: allow skipping link entry — create immediately without links */}
+              {step === 3 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={createMutation.isPending}
+                  onClick={onCreateWithoutLinks}
+                  className="text-muted-foreground text-sm"
+                >
+                  Skip & Create
+                </Button>
+              )}
+
+              {step < 3 ? (
+                <Button type="button" onClick={onNext}>
+                  Next <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              ) : (
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Create Project
+                </Button>
+              )}
+            </div>
           </div>
         </form>
       </DialogContent>
