@@ -55,3 +55,60 @@ export async function sendProjectAssignmentEmail({
     console.error('Failed to send project assignment email via Postmark:', error);
   }
 }
+
+export async function sendFeatureAssignmentEmail({
+  toEmail,
+  assigneeName,
+  projectName,
+  featureName,
+  assignerName,
+  responsibility,
+  projectId,
+  featureId
+}: {
+  toEmail: string;
+  assigneeName: string;
+  projectName: string;
+  featureName: string;
+  assignerName: string;
+  responsibility?: string;
+  projectId: string;
+  featureId: string;
+}) {
+  if (!client || !fromEmail) {
+    console.warn('Postmark is not configured. Missing POSTMARK_SERVER_TOKEN or POSTMARK_FROM_EMAIL');
+    return;
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const featureUrl = `${appUrl}/workspace/projects/${projectId}/features`;
+
+  try {
+    await client.sendEmail({
+      From: fromEmail,
+      To: toEmail,
+      Subject: `New Feature Assignment: ${featureName}`,
+      HtmlBody: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+          <h2 style="color: #097255;">Feature Assignment Notification</h2>
+          <p>Hi ${assigneeName},</p>
+          <p>You have been assigned to the feature <strong>${featureName}</strong> in the project <strong>${projectName}</strong> by ${assignerName}.</p>
+          ${responsibility ? `<p>Your listed responsibility: <em>${responsibility}</em></p>` : ''}
+          <p>Please review the feature details and begin work when ready.</p>
+          <div style="margin: 30px 0;">
+            <a href="${featureUrl}" style="background-color: #097255; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              View Feature Board
+            </a>
+          </div>
+          <p style="font-size: 0.9em; color: #666;">
+            If you have any questions, please reach out to ${assignerName}.
+          </p>
+        </div>
+      `,
+      TextBody: `Hi ${assigneeName},\n\nYou have been assigned to the feature ${featureName} in the project ${projectName} by ${assignerName}.\n${responsibility ? `Your listed responsibility: ${responsibility}\n` : ''}\nView Feature Board: ${featureUrl}`
+    });
+    console.log(`Feature assignment email sent to ${toEmail} for feature ${featureId}`);
+  } catch (error) {
+    console.error('Failed to send feature assignment email via Postmark:', error);
+  }
+}

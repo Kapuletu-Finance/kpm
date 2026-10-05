@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 import { createNotification } from '@/lib/notifications.server';
 import { logActivity } from '@/lib/activity.server';
+import { sendFeatureAssignmentEmail } from '@/lib/email.server';
 
 const assignMemberSchema = z.object({
   member_id: z.string().uuid("Invalid member ID"),
@@ -132,6 +133,25 @@ export async function POST(
       entityId: featureId,
       description: `Assigned a member to feature: ${feature?.title || 'Unknown'}`
     });
+
+    //  Send Postmark Email
+    const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
+    const { data: caller } = await supabase.from('members').select('first_name, last_name').eq('id', user.id).single();
+    
+    const memberData: any = Array.isArray(assignment.members) ? assignment.members[0] : assignment.members;
+    
+    if (memberData?.email) {
+      await sendFeatureAssignmentEmail({
+        toEmail: memberData.email,
+        assigneeName: memberData.first_name || 'Team Member',
+        projectName: project?.name || 'Your Project',
+        featureName: feature?.title || 'Unknown Feature',
+        assignerName: caller ? `${caller.first_name} ${caller.last_name}`.trim() : 'Project Manager',
+        responsibility: result.data.responsibility,
+        projectId,
+        featureId
+      });
+    }
 
     return NextResponse.json(assignment, { status: 201 });
   } catch (error: any) {
