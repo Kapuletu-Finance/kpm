@@ -1,52 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { count, desc, eq, getTableColumns } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { activity_logs, members, projects } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getMember } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient();
-    
-    // Auth check
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    // Verify user is an admin of the organization
-    const { data: member } = await supabase
-      .from('members')
-      .select('organization_role')
-      .eq('id', user.id)
-      .single();
-    
-    if (!member || member.organization_role !== 'Organization Admin') {
+    const member = await getMember(user.id);
+    if (!member || member.organization_role !== 'Organization Admin' || !member.organization_id) {
       return NextResponse.json({ error: 'Not authorized for organization logs' }, { status: 403 });
     }
 
-    // Parse query params for pagination
     const url = new URL(req.url);
-    const limit = parseInt(url.searchParams.get('limit') || '50');
-    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '50') || 50, 1), 200);
+    const offset = Math.max(parseInt(url.searchParams.get('offset') || '0') || 0, 0);
 
-    // Fetch all activity logs across the workspace
-    const { data: logs, error, count } = await supabase
-      .from('activity_logs')
-      .select(`
-        *,
-        member:members(id, first_name, last_name, avatar_url, role:organization_role),
-        project:projects(id, name)
-      `, { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    // Activity across this organization's projects only
+    const inOrg = eq(projects.organization_id, member.organization_id);
 
-    if (error) throw error;
-    
-    return NextResponse.json({
-      data: logs,
-      count,
-      offset,
-      limit
-    });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const [logs, [{ total }]] = await Promise.all([
+      db
+        .select({
+          ...getTableColumns(activity_logs),
+          member: {
+            id: members.id,
+            first_name: members.first_name,
+            last_name: members.last_name,
+            avatar_url: members.avatar_url,
+            role: members.organization_role,
+          },
+          project: { id: projects.id, name: projects.name },
+        })
+        .from(activity_logs)
+        .innerJoin(projects, eq(projects.id, activity_logs.project_id))
+        .leftJoin(members, eq(members.id, activity_logs.member_id))
+        .where(inOrg)
+        .orderBy(desc(activity_logs.created_at))
+        .limit(limit)
+        .offset(offset),
+      db
+        .select({ total: count() })
+        .from(activity_logs)
+        .innerJoin(projects, eq(projects.id, activity_logs.project_id))
+        .where(inOrg),
+    ]);
+
+    return NextResponse.json({ data: logs, count: total, offset, limit });
+  } catch (error) {
+    return handleRouteError(error, 'Organization activity error');
   }
 }

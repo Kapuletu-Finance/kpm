@@ -1,13 +1,12 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { createClient } from '@/lib/supabase/client';
-import { authService } from '@/services/auth.service';
+
+export type AuthUser = { id: string; email?: string | null; name?: string | null };
 
 type AuthContextType = {
-  user: User | null;
-  session: Session | null;
+  user: AuthUser | null;
+  session: { user: AuthUser } | null;
   memberProfile: any | null;
   isLoading: boolean;
 };
@@ -15,57 +14,32 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [memberProfile, setMemberProfile] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const supabase = createClient();
+    let cancelled = false;
 
-    const fetchSession = async () => {
-      try {
-        const currentSession = await authService.getSession();
-        setSession(currentSession);
-        
-        if (currentSession?.user) {
-          setUser(currentSession.user);
-          const profile = await authService.getMemberProfile(currentSession.user.id);
-          setMemberProfile(profile);
-        }
-      } catch (error) {
-        console.error('Error fetching session:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        
-        if (currentSession?.user) {
-          try {
-             const profile = await authService.getMemberProfile(currentSession.user.id);
-             setMemberProfile(profile);
-          } catch(e) {}
-        } else {
-          setMemberProfile(null);
-        }
-        setIsLoading(false);
-      }
-    );
+    fetch('/api/v1/auth/me', { cache: 'no-store' })
+      .then(async (res) => (res.ok ? res.json() : { user: null, memberProfile: null }))
+      .then((data) => {
+        if (cancelled) return;
+        setUser(data.user);
+        setMemberProfile(data.memberProfile);
+      })
+      .catch((error) => console.error('Error fetching session:', error))
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
 
     return () => {
-      subscription.unsubscribe();
+      cancelled = true;
     };
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, memberProfile, isLoading }}>
+    <AuthContext.Provider value={{ user, session: user ? { user } : null, memberProfile, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

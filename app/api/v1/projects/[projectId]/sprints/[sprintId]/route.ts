@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { feature_members, features, members, sprints } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { canManageProject, getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const updateSprintSchema = z.object({
   name: z.string().min(1).optional(),
@@ -12,165 +17,113 @@ const updateSprintSchema = z.object({
   status: z.enum(['Planning', 'Active', 'Review', 'Completed']).optional(),
 });
 
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_id, organization_role')
-    .eq('id', user.id)
-    .single();
+type Params = { params: Promise<{ projectId: string; sprintId: string }> };
 
-  if (!callerMember) return { hasAccess: false };
+const sprintInProject = (sprintId: string, projectId: string) =>
+  and(eq(sprints.id, sprintId), eq(sprints.project_id, projectId));
 
-  if (callerMember.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
-  }
-
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-
-  return { hasAccess: !!projectAccess, role: projectAccess?.project_role };
-}
-
-// Verify Sprint belongs to this project
-async function verifySprintProject(supabase: any, sprintId: string, projectId: string) {
-  const { data: check } = await supabase
-    .from('sprints')
-    .select('id')
-    .eq('id', sprintId)
-    .eq('project_id', projectId)
-    .single();
-  
-  return !!check;
-}
-
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string; sprintId: string }> }
-) {
+export async function GET(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, sprintId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const [access, [sprint]] = await Promise.all([
+      getProjectAccess(user.id, projectId),
+      db.select().from(sprints).where(sprintInProject(sprintId, projectId)).limit(1),
+    ]);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!sprint) return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
 
-    if (!(await verifySprintProject(supabase, sprintId, projectId))) {
-      return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
-    }
+    const sprintFeatures = await db
+      .select({
+        id: features.id,
+        module_id: features.module_id,
+        title: features.title,
+        description: features.description,
+        priority: features.priority,
+        status: features.status,
+      })
+      .from(features)
+      .where(eq(features.sprint_id, sprintId));
 
-    const { data: sprint, error: fetchError } = await supabase
-      .from('sprints')
-      .select(`
-        *,
-        features (
-          id,
-          module_id,
-          title,
-          description,
-          priority,
-          status,
-          feature_members (
-            id,
-            member_id,
-            members (
-              first_name,
-              last_name,
-              avatar_url
-            )
-          )
-        )
-      `)
-      .eq('id', sprintId)
-      .single();
+    const assignees = sprintFeatures.length
+      ? await db
+          .select({
+            feature_id: feature_members.feature_id,
+            id: feature_members.id,
+            member_id: feature_members.member_id,
+            members: { first_name: members.first_name, last_name: members.last_name, avatar_url: members.avatar_url },
+          })
+          .from(feature_members)
+          .leftJoin(members, eq(members.id, feature_members.member_id))
+          .where(inArray(feature_members.feature_id, sprintFeatures.map((f) => f.id)))
+      : [];
 
-    if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 400 });
-
-    return NextResponse.json(sprint);
-  } catch (error: any) {
-    console.error('Fetch sprint error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({
+      ...sprint,
+      features: sprintFeatures.map((feature) => ({
+        ...feature,
+        feature_members: assignees
+          .filter((a) => a.feature_id === feature.id)
+          .map((a) => ({ id: a.id, member_id: a.member_id, members: a.members })),
+      })),
+    });
+  } catch (error) {
+    return handleRouteError(error, 'Fetch sprint error');
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string; sprintId: string }> }
-) {
+export async function PATCH(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, sprintId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess, role } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (role !== 'Organization Admin' && role !== 'Project Manager') {
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProject(access)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    if (!(await verifySprintProject(supabase, sprintId, projectId))) {
-      return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
-    }
-
-    const body = await request.json();
-    const result = updateSprintSchema.safeParse(body);
+    const result = updateSprintSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    const { data: sprint, error: updateError } = await supabase
-      .from('sprints')
-      .update(result.data)
-      .eq('id', sprintId)
-      .select()
-      .single();
+    const [sprint] = await db
+      .update(sprints)
+      .set(result.data)
+      .where(sprintInProject(sprintId, projectId))
+      .returning();
 
-    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
+    if (!sprint) return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
 
     return NextResponse.json(sprint);
-  } catch (error: any) {
-    console.error('Update sprint error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Update sprint error');
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string; sprintId: string }> }
-) {
+export async function DELETE(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, sprintId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess, role } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (role !== 'Organization Admin' && role !== 'Project Manager') {
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProject(access)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    if (!(await verifySprintProject(supabase, sprintId, projectId))) {
-      return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
-    }
+    const [deleted] = await db
+      .delete(sprints)
+      .where(sprintInProject(sprintId, projectId))
+      .returning({ id: sprints.id });
 
-    const { error: deleteError } = await supabase
-      .from('sprints')
-      .delete()
-      .eq('id', sprintId);
-
-    if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 400 });
+    if (!deleted) return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
 
     return NextResponse.json({ message: 'Sprint deleted successfully' });
-  } catch (error: any) {
-    console.error('Delete sprint error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Delete sprint error');
   }
 }

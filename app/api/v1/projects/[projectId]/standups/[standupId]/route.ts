@@ -1,68 +1,43 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { daily_updates } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { canManageProject, getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const updateStandupSchema = z.object({
   manager_comments: z.string().optional(),
 });
-
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_id, organization_role')
-    .eq('id', user.id)
-    .single();
-
-  if (!callerMember) return { hasAccess: false };
-
-  if (callerMember.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
-  }
-
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-
-  return { hasAccess: !!projectAccess, role: projectAccess?.project_role };
-}
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ projectId: string; standupId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId, standupId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess, role } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (role !== 'Organization Admin' && role !== 'Project Manager') {
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProject(access)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const result = updateStandupSchema.safeParse(body);
+    const result = updateStandupSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    const { data: standup, error: updateError } = await supabase
-      .from('daily_updates')
-      .update(result.data)
-      .eq('id', standupId)
-      .eq('project_id', projectId)
-      .select()
-      .single();
+    const [standup] = await db
+      .update(daily_updates)
+      .set(result.data)
+      .where(and(eq(daily_updates.id, standupId), eq(daily_updates.project_id, projectId)))
+      .returning();
 
-    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
-
+    if (!standup) return NextResponse.json({ error: 'Standup not found' }, { status: 404 });
     return NextResponse.json(standup);
-  } catch (error: any) {
-    console.error('Update standup error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Update standup error');
   }
 }

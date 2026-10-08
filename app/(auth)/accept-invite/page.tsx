@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { createClient } from '@/lib/supabase/client';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
 
 const acceptInviteSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -22,33 +22,22 @@ const acceptInviteSchema = z.object({
 
 type AcceptInviteFormValues = z.infer<typeof acceptInviteSchema>;
 
-export default function AcceptInvitePage() {
+function AcceptInviteForm() {
+  const token = useSearchParams().get('token') ?? '';
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const router = useRouter();
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(token ? null : 'This invitation link is missing its token.');
 
   useEffect(() => {
-    // Manual Token Hydration:
-    // Bypass Next.js/Supabase SSR race conditions by manually establishing the session
-    const hash = window.location.hash;
-    if (hash) {
-      // The hash might start with #, we need to treat it like query params
-      const paramsString = hash.startsWith('#') ? hash.substring(1) : hash;
-      const params = new URLSearchParams(paramsString);
-      
-      const access_token = params.get('access_token');
-      const refresh_token = params.get('refresh_token');
-      
-      if (access_token && refresh_token) {
-        const supabase = createClient();
-        // Force the session into existence immediately
-        supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
-          if (error) {
-            console.error('Manual hydration error:', error);
-          }
-        });
-      }
-    }
-  }, []);
+    if (!token) return;
+    fetch(`/api/v1/auth/activate?token=${encodeURIComponent(token)}`)
+      .then(async (res) => {
+        const body = await res.json();
+        if (res.ok) setInvitedEmail(body.email);
+        else setLinkError(body.error || 'This invitation link is invalid or has expired.');
+      })
+      .catch(() => setLinkError('Could not verify the invitation link.'));
+  }, [token]);
 
   const {
     register,
@@ -61,21 +50,16 @@ export default function AcceptInvitePage() {
   const onSubmit = async (data: AcceptInviteFormValues) => {
     setIsSubmitting(true);
     try {
-      const supabase = createClient();
-      
-      // Update password directly on the client to ensure we use the session from the URL hash fragment
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: data.password
+      const res = await fetch('/api/v1/auth/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password: data.password }),
       });
-
-      if (updateError) throw updateError;
-      
-      // Update member status from 'Invited' to 'Active'
-      const activateRes = await fetch('/api/v1/auth/activate', { method: 'POST' });
-      if (!activateRes.ok) {
-        throw new Error('Failed to activate member status');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to activate account');
       }
-      
+
       toast.success('Account activated successfully');
       window.location.href = '/workspace';
     } catch (error: any) {
@@ -84,11 +68,24 @@ export default function AcceptInvitePage() {
     }
   };
 
+  if (linkError) {
+    return (
+      <div className="flex flex-col space-y-4 text-center lg:text-left">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Invitation unavailable</h1>
+        <p className="text-sm text-muted-foreground">{linkError} Ask your organization admin to resend the invitation.</p>
+        <Link href="/login" className="text-primary hover:underline text-sm font-medium">Return to login</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col space-y-6">
       <div className="flex flex-col space-y-2 text-center lg:text-left">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Accept Invitation</h1>
-        <p className="text-sm text-muted-foreground">Set your password to activate your account and join the workspace.</p>
+        <p className="text-sm text-muted-foreground">
+          Set your password to activate your account and join the workspace.
+          {invitedEmail && <> Signing in as <span className="font-medium text-foreground">{invitedEmail}</span>.</>}
+        </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -97,6 +94,7 @@ export default function AcceptInvitePage() {
           <Input
             id="password"
             type="password"
+            autoComplete="new-password"
             {...register('password')}
             className={errors.password ? 'border-destructive' : ''}
           />
@@ -108,6 +106,7 @@ export default function AcceptInvitePage() {
           <Input
             id="confirmPassword"
             type="password"
+            autoComplete="new-password"
             {...register('confirmPassword')}
             className={errors.confirmPassword ? 'border-destructive' : ''}
           />
@@ -126,5 +125,13 @@ export default function AcceptInvitePage() {
         </Button>
       </form>
     </div>
+  );
+}
+
+export default function AcceptInvitePage() {
+  return (
+    <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}>
+      <AcceptInviteForm />
+    </Suspense>
   );
 }

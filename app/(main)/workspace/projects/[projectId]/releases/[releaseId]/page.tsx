@@ -12,7 +12,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ArrowLeft, Rocket, Save, Plus, X, Loader2, CheckCircle2, Circle } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 
@@ -37,7 +36,6 @@ export default function ReleaseDetailPage({ params }: { params: Promise<{ projec
   const [unassignedFeatures, setUnassignedFeatures] = useState<any[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
-  const supabase = createClient();
 
   useEffect(() => {
     if (release) {
@@ -47,27 +45,8 @@ export default function ReleaseDetailPage({ params }: { params: Promise<{ projec
   }, [release]);
 
   const loadUnassignedFeatures = async () => {
-    const { data } = await supabase
-      .from('features')
-      .select('id, title, status, priority')
-      .eq('module_id', (await supabase.from('modules').select('id').eq('roadmap_id', (await supabase.from('roadmaps').select('id').eq('project_id', projectId).single()).data?.id))) // Simplification, ideally we join properly, but let's just query where release_id is null
-    
-    // Actually, we can just fetch all features for the project. 
-    // Wait, let's do a proper query:
-    const { data: roadmaps } = await supabase.from('roadmaps').select('id').eq('project_id', projectId);
-    if (!roadmaps?.length) return;
-    const roadmapIds = roadmaps.map(r => r.id);
-    const { data: modules } = await supabase.from('modules').select('id').in('roadmap_id', roadmapIds);
-    if (!modules?.length) return;
-    const moduleIds = modules.map(m => m.id);
-    
-    const { data: features } = await supabase
-      .from('features')
-      .select('id, title, status, priority')
-      .in('module_id', moduleIds)
-      .is('release_id', null);
-
-    if (features) setUnassignedFeatures(features);
+    const res = await fetch(`/api/v1/projects/${projectId}/releases/${releaseId}/features?unassigned=1`);
+    if (res.ok) setUnassignedFeatures(await res.json());
   };
 
   const handleUpdate = async () => {

@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# self-hosted database secrets
+infra/.env.prod
+infra/pgbouncer/userlist.txt
+infra/pgbouncer/tls/
+# raw drizzle-kit pull output (review, then move into lib/db/schema)
+drizzle/supabase-introspect/
+!infra/.env.prod.example

@@ -36,3 +36,17 @@ The system was engineered with a strict adherence to a clean, professional user 
 - **Dynamic Workspaces:** Dashboards adapt to the authenticated user's role, ensuring that Project Managers see portfolio health while developers see immediate technical assignments.
 - **Auditability:** Every significant action, status change, and approval is tracked to ensure full accountability across the development lifecycle.
 - **Performance:** Optimized data fetching and strict state management ensure a highly responsive experience, regardless of the workspace size or complexity.
+
+## Development
+
+```bash
+cp .env.example .env.local   # set AUTH_SECRET: openssl rand -base64 32
+npm install
+npm run db:setup             # local PostgreSQL 16 in Docker, migrations, demo data
+npm run dev
+```
+
+Sign in at http://localhost:3000/login as `admin@kpm.local` (password `Password123!`).
+
+Stack: Next.js 16, PostgreSQL 16 + Drizzle ORM, Auth.js, Cloudinary (files), Postmark (email).
+Deployment, the Supabase data import and backups are covered in [infra/README.md](infra/README.md).

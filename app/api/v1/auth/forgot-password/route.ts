@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { users } from '@/lib/db/schema';
+import { issueToken } from '@/lib/auth/tokens';
+import { sendPasswordResetEmail } from '@/lib/email.server';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -18,21 +22,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email } = result.data;
-    const supabase = await createClient();
+    const email = result.data.email.trim().toLowerCase();
+    const [user] = await db
+      .select({ id: users.id, passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
 
-    const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`;
-    
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo,
-    });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    // Only accounts with a password can reset it (invitees use their invite link).
+    // The response is identical either way so it cannot be used to probe for accounts.
+    if (user?.passwordHash) {
+      const token = await issueToken('reset', email);
+      await sendPasswordResetEmail({ toEmail: email, token });
     }
 
     return NextResponse.json({ message: 'Password reset email sent' });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Forgot password exception:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

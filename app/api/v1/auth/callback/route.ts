@@ -1,30 +1,27 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, eq, isNull } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { users } from '@/lib/db/schema';
+import { consumeToken } from '@/lib/auth/tokens';
+import { appUrl } from '@/lib/email.server';
 
+// Target of the "confirm your email" link sent at signup.
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get('code');
-  // if "next" is in param, use it as the redirect URL
-  const next = searchParams.get('next') ?? '/workspace';
+  const token = new URL(request.url).searchParams.get('token') ?? '';
+  const base = appUrl();
 
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      const forwardedHost = request.headers.get('x-forwarded-host'); // original origin before load balancer
-      const isLocalEnv = process.env.NODE_ENV === 'development';
-      
-      if (isLocalEnv) {
-        // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-        return NextResponse.redirect(`${origin}${next}`);
-      } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`);
-      } else {
-        return NextResponse.redirect(`${origin}${next}`);
-      }
+  try {
+    const email = await consumeToken('verify', token);
+    if (email) {
+      await db
+        .update(users)
+        .set({ emailVerified: new Date() })
+        .where(and(eq(users.email, email), isNull(users.emailVerified)));
+      return NextResponse.redirect(`${base}/login?verified=1`);
     }
+  } catch (err) {
+    console.error('Email verification error:', err);
   }
 
-  // return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/login?error=Invalid+or+expired+verification+link`);
+  return NextResponse.redirect(`${base}/login?error=Invalid+or+expired+verification+link`);
 }

@@ -1,4 +1,5 @@
 import * as postmark from 'postmark';
+import { inviteTemplate, resetTemplate, signupTemplate } from '@/lib/email/templates.generated';
 
 const serverToken = process.env.POSTMARK_SERVER_TOKEN;
 const fromEmail = process.env.POSTMARK_FROM_EMAIL;
@@ -111,4 +112,87 @@ export async function sendFeatureAssignmentEmail({
   } catch (error) {
     console.error('Failed to send feature assignment email via Postmark:', error);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Account emails (formerly sent by Supabase Auth), using the branded templates.
+// ---------------------------------------------------------------------------
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+function renderTemplate(template: string, url: string, data: Record<string, string> = {}) {
+  return template
+    .replace(/\{\{\s*\.ConfirmationURL\s*\}\}/g, escapeHtml(url))
+    .replace(/\{\{\s*\.Data\.(\w+)\s*\}\}/g, (_, key: string) => escapeHtml(data[key] ?? ''));
+}
+
+export function appUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+}
+
+async function sendAccountEmail(to: string, subject: string, html: string, text: string, link: string) {
+  // Local development: always print the link so flows can be tested without an inbox.
+  if (process.env.NODE_ENV !== 'production') console.info(`[email] ${subject} -> ${to}\n        ${link}`);
+
+  if (!client || !fromEmail) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('Postmark is not configured. Missing POSTMARK_SERVER_TOKEN or POSTMARK_FROM_EMAIL');
+    }
+    return;
+  }
+  try {
+    await client.sendEmail({ From: fromEmail, To: to, Subject: subject, HtmlBody: html, TextBody: text });
+  } catch (error) {
+    console.error(`Failed to send "${subject}" email via Postmark:`, error);
+  }
+}
+
+export async function sendVerificationEmail({ toEmail, fullName, token }: { toEmail: string; fullName: string; token: string }) {
+  const link = `${appUrl()}/api/v1/auth/callback?token=${encodeURIComponent(token)}`;
+  await sendAccountEmail(
+    toEmail,
+    'Confirm your KPM account',
+    renderTemplate(signupTemplate, link, { full_name: fullName }),
+    `Hi ${fullName},\n\nConfirm your email address to activate your KPM workspace:\n${link}\n\nThis link expires in 24 hours.`,
+    link,
+  );
+}
+
+export async function sendInviteEmail({
+  toEmail,
+  token,
+  inviterName,
+  organizationName,
+  invitedRole,
+}: {
+  toEmail: string;
+  token: string;
+  inviterName: string;
+  organizationName: string;
+  invitedRole: string;
+}) {
+  const link = `${appUrl()}/accept-invite?token=${encodeURIComponent(token)}`;
+  await sendAccountEmail(
+    toEmail,
+    `You've been invited to join ${organizationName} on KPM`,
+    renderTemplate(inviteTemplate, link, {
+      inviter_name: inviterName,
+      organization_name: organizationName,
+      invited_role: invitedRole,
+    }),
+    `${inviterName} invited you to join ${organizationName} on KPM as ${invitedRole}.\n\nAccept the invitation:\n${link}\n\nThis link expires in 7 days.`,
+    link,
+  );
+}
+
+export async function sendPasswordResetEmail({ toEmail, token }: { toEmail: string; token: string }) {
+  const link = `${appUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+  await sendAccountEmail(
+    toEmail,
+    'Reset your KPM password',
+    renderTemplate(resetTemplate, link),
+    `Reset your KPM password:\n${link}\n\nThis link expires in 1 hour. If you did not request it, ignore this email.`,
+    link,
+  );
 }

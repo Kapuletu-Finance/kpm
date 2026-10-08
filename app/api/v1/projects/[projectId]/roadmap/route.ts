@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { modules, roadmaps } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { canManageProject, getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const createRoadmapSchema = z.object({
   name: z.string().min(1, 'Phase name is required'),
@@ -15,65 +20,33 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    // Verify auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    // Verify user has access to this project
-    const { data: callerMember } = await supabase
-      .from('members')
-      .select('organization_id, organization_role')
-      .eq('id', user.id)
-      .single();
+    // Phases in order, each with its modules in order
+    const phases = await db
+      .select()
+      .from(roadmaps)
+      .where(eq(roadmaps.project_id, projectId))
+      .orderBy(asc(roadmaps.order_index));
 
-    if (!callerMember) {
-      return NextResponse.json({ error: 'Not part of an organization' }, { status: 403 });
-    }
+    const phaseModules = phases.length
+      ? await db
+          .select()
+          .from(modules)
+          .where(inArray(modules.roadmap_id, phases.map((p) => p.id)))
+          .orderBy(asc(modules.order_index))
+      : [];
 
-    if (callerMember.organization_role !== 'Organization Admin') {
-      const { data: projectAccess, error: accessError } = await supabase
-        .from('project_members')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('member_id', user.id)
-        .single();
-      
-      if (accessError || !projectAccess) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
-
-    // Fetch roadmaps joined with their nested modules
-    const { data: roadmaps, error: fetchError } = await supabase
-      .from('roadmaps')
-      .select(`
-        *,
-        modules (
-          *
-        )
-      `)
-      .eq('project_id', projectId)
-      .order('order_index', { ascending: true });
-
-    if (fetchError) {
-      return NextResponse.json({ error: fetchError.message }, { status: 400 });
-    }
-
-    // Sort modules by order_index inside the JS since Supabase nested order requires special syntax
-    const sortedRoadmaps = roadmaps.map((rm: any) => ({
-      ...rm,
-      modules: Array.isArray(rm.modules) ? rm.modules.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)) : []
-    }));
-
-    return NextResponse.json(sortedRoadmaps);
-  } catch (error: any) {
-    console.error('Fetch roadmap error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      phases.map((phase) => ({ ...phase, modules: phaseModules.filter((m) => m.roadmap_id === phase.id) })),
+    );
+  } catch (error) {
+    return handleRouteError(error, 'Fetch roadmap error');
   }
 }
 
@@ -82,57 +55,24 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
-    
-    // Verify auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    // Get caller's member record
-    const { data: callerMember } = await supabase
-      .from('members')
-      .select('organization_id, organization_role')
-      .eq('id', user.id)
-      .single();
-
-    if (!callerMember) {
-      return NextResponse.json({ error: 'Member not found' }, { status: 404 });
-    }
-
-    // Verify caller is Admin or PM
-    let hasPermission = false;
-    if (callerMember.organization_role === 'Organization Admin') {
-      hasPermission = true;
-    } else {
-      const { data: pmAccess } = await supabase
-        .from('project_members')
-        .select('project_role')
-        .eq('project_id', projectId)
-        .eq('member_id', user.id)
-        .eq('project_role', 'Project Manager')
-        .single();
-      
-      if (pmAccess) hasPermission = true;
-    }
-
-    if (!hasPermission) {
+    // Admins and the project's PMs create phases
+    const access = await getProjectAccess(user.id, projectId);
+    if (!canManageProject(access)) {
       return NextResponse.json({ error: 'Insufficient permissions to create a roadmap phase' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const result = createRoadmapSchema.safeParse(body);
-
+    const result = createRoadmapSchema.safeParse(await request.json());
     if (!result.success) {
       return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
     }
 
-    // Insert roadmap
-    const { data: newRoadmap, error: insertError } = await supabase
-      .from('roadmaps')
-      .insert({
+    const [newRoadmap] = await db
+      .insert(roadmaps)
+      .values({
         project_id: projectId,
         name: result.data.name,
         description: result.data.description,
@@ -140,17 +80,10 @@ export async function POST(
         end_date: result.data.end_date || null,
         order_index: result.data.order_index
       })
-      .select(`*, modules(*)`)
-      .single();
+      .returning();
 
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 400 });
-    }
-
-    return NextResponse.json(newRoadmap, { status: 201 });
-
-  } catch (error: any) {
-    console.error('Create roadmap error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ ...newRoadmap, modules: [] }, { status: 201 });
+  } catch (error) {
+    return handleRouteError(error, 'Create roadmap error');
   }
 }

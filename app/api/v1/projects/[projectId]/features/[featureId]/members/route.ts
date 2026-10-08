@@ -1,6 +1,16 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { after, NextResponse } from 'next/server';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { feature_members, features, members, projects } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import {
+  canManageProject,
+  getFeatureProjectId,
+  getProjectAccess,
+  getProjectMembership,
+} from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 import { createNotification } from '@/lib/notifications.server';
 import { logActivity } from '@/lib/activity.server';
 import { sendFeatureAssignmentEmail } from '@/lib/email.server';
@@ -10,152 +20,97 @@ const assignMemberSchema = z.object({
   responsibility: z.string().optional(),
 });
 
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_id, organization_role')
-    .eq('id', user.id)
-    .single();
-
-  if (!callerMember) return { hasAccess: false };
-
-  if (callerMember.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
-  }
-
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-
-  return { hasAccess: !!projectAccess, role: projectAccess?.project_role };
-}
-
-// Verify Feature belongs to this project
-async function verifyFeatureProject(supabase: any, featureId: string, projectId: string) {
-  const { data: check } = await supabase
-    .from('features')
-    .select('id, modules!inner(roadmaps!inner(project_id))')
-    .eq('id', featureId)
-    .eq('modules.roadmaps.project_id', projectId)
-    .single();
-  
-  return !!check;
-}
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ projectId: string; featureId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId, featureId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess, role } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (role !== 'Organization Admin' && role !== 'Project Manager') {
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProject(access)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    if (!(await verifyFeatureProject(supabase, featureId, projectId))) {
+    if ((await getFeatureProjectId(featureId)) !== projectId) {
       return NextResponse.json({ error: 'Feature not found in this project' }, { status: 404 });
     }
 
-    const body = await request.json();
-    const result = assignMemberSchema.safeParse(body);
+    const result = assignMemberSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    // Verify the member being assigned is actually in the project
-    const { data: isProjectMember } = await supabase
-      .from('project_members')
-      .select('id')
-      .eq('project_id', projectId)
-      .eq('member_id', result.data.member_id)
-      .single();
-      
-    if (!isProjectMember) return NextResponse.json({ error: 'User is not a member of this project' }, { status: 400 });
+    const { member_id, responsibility } = result.data;
 
-    // Ensure they aren't already assigned to avoid duplicates
-    const { data: existing } = await supabase
-      .from('feature_members')
-      .select('id')
-      .eq('feature_id', featureId)
-      .eq('member_id', result.data.member_id)
-      .single();
-      
+    // The assignee must be on the project and not already assigned
+    const [isProjectMember, [existing]] = await Promise.all([
+      getProjectMembership(projectId, member_id),
+      db
+        .select({ id: feature_members.id })
+        .from(feature_members)
+        .where(and(eq(feature_members.feature_id, featureId), eq(feature_members.member_id, member_id)))
+        .limit(1),
+    ]);
+
+    if (!isProjectMember) return NextResponse.json({ error: 'User is not a member of this project' }, { status: 400 });
     if (existing) return NextResponse.json({ error: 'Member is already assigned to this feature' }, { status: 400 });
 
-    const { data: assignment, error: createError } = await supabase
-      .from('feature_members')
-      .insert({
-        feature_id: featureId,
-        member_id: result.data.member_id,
-        responsibility: result.data.responsibility,
-      })
-      .select(`
-        id,
+    const [created] = await db
+      .insert(feature_members)
+      .values({ feature_id: featureId, member_id, responsibility })
+      .returning({ id: feature_members.id, member_id: feature_members.member_id, responsibility: feature_members.responsibility });
+
+    const [[assignee], [feature], [project]] = await Promise.all([
+      db
+        .select({ first_name: members.first_name, last_name: members.last_name, email: members.email, avatar_url: members.avatar_url })
+        .from(members)
+        .where(eq(members.id, member_id))
+        .limit(1),
+      db.select({ title: features.title }).from(features).where(eq(features.id, featureId)).limit(1),
+      db.select({ name: projects.name }).from(projects).where(eq(projects.id, projectId)).limit(1),
+    ]);
+
+    const featureTitle = feature?.title || 'Unknown';
+
+    await Promise.all([
+      createNotification({
         member_id,
-        responsibility,
-        members (
-          first_name,
-          last_name,
-          email,
-          avatar_url
-        )
-      `)
-      .single();
-
-    if (createError) return NextResponse.json({ error: createError.message }, { status: 500 });
-
-    // 🚀 Inject Notification
-    const { data: feature } = await supabase.from('features').select('title').eq('id', featureId).single();
-    await createNotification({
-      member_id: result.data.member_id,
-      title: `You have been assigned to a feature`,
-      message: `You were assigned as ${result.data.responsibility || 'a member'} to feature: ${feature?.title || 'Unknown'}`,
-      type: 'Assignment',
-      entity_type: 'Feature',
-      entity_id: featureId
-    });
-
-    // Log the activity
-    await logActivity({
-      supabase,
-      projectId,
-      memberId: user.id,
-      action: 'Assigned',
-      entityType: 'Feature',
-      entityId: featureId,
-      description: `Assigned a member to feature: ${feature?.title || 'Unknown'}`
-    });
-
-    //  Send Postmark Email
-    const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
-    const { data: caller } = await supabase.from('members').select('first_name, last_name').eq('id', user.id).single();
-    
-    const memberData: any = Array.isArray(assignment.members) ? assignment.members[0] : assignment.members;
-    
-    if (memberData?.email) {
-      await sendFeatureAssignmentEmail({
-        toEmail: memberData.email,
-        assigneeName: memberData.first_name || 'Team Member',
-        projectName: project?.name || 'Your Project',
-        featureName: feature?.title || 'Unknown Feature',
-        assignerName: caller ? `${caller.first_name} ${caller.last_name}`.trim() : 'Project Manager',
-        responsibility: result.data.responsibility,
+        title: `You have been assigned to a feature`,
+        message: `You were assigned as ${responsibility || 'a member'} to feature: ${featureTitle}`,
+        type: 'Assignment',
+        entity_type: 'Feature',
+        entity_id: featureId
+      }),
+      logActivity({
         projectId,
-        featureId
-      });
+        memberId: user.id,
+        action: 'Assigned',
+        entityType: 'Feature',
+        entityId: featureId,
+        description: `Assigned a member to feature: ${featureTitle}`
+      }),
+    ]);
+
+    if (assignee?.email) {
+      const caller = access.member;
+      after(() =>
+        sendFeatureAssignmentEmail({
+          toEmail: assignee.email,
+          assigneeName: assignee.first_name || 'Team Member',
+          projectName: project?.name || 'Your Project',
+          featureName: feature?.title || 'Unknown Feature',
+          assignerName: `${caller.first_name} ${caller.last_name}`.trim() || 'Project Manager',
+          responsibility,
+          projectId,
+          featureId
+        })
+      );
     }
 
-    return NextResponse.json(assignment, { status: 201 });
-  } catch (error: any) {
-    console.error('Assign feature member error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ ...created, members: assignee ?? null }, { status: 201 });
+  } catch (error) {
+    return handleRouteError(error, 'Assign feature member error');
   }
 }

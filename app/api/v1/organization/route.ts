@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { members, organizations, users } from '@/lib/db/schema';
+import { signOut } from '@/auth';
+import { requireApiUser } from '@/lib/auth/session';
+import { getMember } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const updateOrgSchema = z.object({
   name: z.string().min(1).optional(),
@@ -12,120 +18,83 @@ const updateOrgSchema = z.object({
   logo_url: z.string().url().optional().or(z.literal('')),
 });
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const supabase = await createClient();
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { data: member, error: memberError } = await supabase
-      .from('members')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single();
-
-    if (memberError || !member) {
+    const member = await getMember(user.id);
+    if (!member || !member.organization_id) {
       return NextResponse.json({ error: 'Member profile not found' }, { status: 404 });
     }
 
-    const { data: org, error: orgError } = await supabase
-      .from('organizations')
-      .select('*')
-      .eq('id', member.organization_id)
-      .single();
-
-    if (orgError || !org) {
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, member.organization_id)).limit(1);
+    if (!org) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
     return NextResponse.json(org);
-  } catch (err: any) {
-    console.error('Organization GET exception:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (err) {
+    return handleRouteError(err, 'Organization GET exception');
   }
 }
 
 export async function PATCH(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { data: member } = await supabase
-      .from('members')
-      .select('organization_id, organization_role')
-      .eq('id', user.id)
-      .single();
-
-    if (!member || member.organization_role !== 'Organization Admin') {
+    const member = await getMember(user.id);
+    if (!member || member.organization_role !== 'Organization Admin' || !member.organization_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const validatedData = updateOrgSchema.parse(body);
-
-    const { data: updatedOrg, error: updateError } = await supabase
-      .from('organizations')
-      .update(validatedData)
-      .eq('id', member.organization_id)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    const result = updateOrgSchema.safeParse(await request.json());
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues }, { status: 400 });
     }
+
+    const [updatedOrg] = await db
+      .update(organizations)
+      .set(result.data)
+      .where(eq(organizations.id, member.organization_id))
+      .returning();
 
     return NextResponse.json(updatedOrg);
-  } catch (err: any) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.issues }, { status: 400 });
-    }
-    console.error('Organization PATCH exception:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (err) {
+    return handleRouteError(err, 'Organization PATCH exception');
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { data: member } = await supabase
-      .from('members')
-      .select('organization_id, organization_role')
-      .eq('id', user.id)
-      .single();
-
-    if (!member || member.organization_role !== 'Organization Admin') {
+    const member = await getMember(user.id);
+    if (!member || member.organization_role !== 'Organization Admin' || !member.organization_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const organizationId = member.organization_id;
 
-    // Relying on CASCADE DELETE setup in the database to remove members, projects, features, etc.
-    const { error: deleteError } = await supabase
-      .from('organizations')
-      .delete()
-      .eq('id', member.organization_id);
+    // Deleting the organization cascades to members, projects, features, etc.
+    // The members' login accounts are removed too, so no orphaned logins remain.
+    await db.transaction(async (tx) => {
+      const orgMembers = await tx
+        .select({ id: members.id })
+        .from(members)
+        .where(eq(members.organization_id, organizationId));
 
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 400 });
-    }
+      await tx.delete(organizations).where(eq(organizations.id, organizationId));
+      if (orgMembers.length) {
+        await tx.delete(users).where(inArray(users.id, orgMembers.map((m) => m.id)));
+      }
+    });
 
-    // Log the user out of supabase so their session is completely dead
-    await supabase.auth.signOut();
+    await signOut({ redirect: false });
 
     return NextResponse.json({ message: 'Organization deleted' });
-  } catch (err: any) {
-    console.error('Organization DELETE exception:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (err) {
+    return handleRouteError(err, 'Organization DELETE exception');
   }
 }

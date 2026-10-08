@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, desc, eq, getTableColumns } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { deliverables, members, reviews } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { canManageProject, getFeatureProjectId, getProjectAccess, memberSummary } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 import { createNotification } from '@/lib/notifications.server';
 import { logActivity } from '@/lib/activity.server';
 
@@ -9,138 +14,103 @@ const reviewSchema = z.object({
   comments: z.string().optional(),
 });
 
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-    
-  if (projectAccess) return { hasAccess: true, role: projectAccess.project_role };
+type Params = { params: Promise<{ projectId: string, featureId: string, deliverableId: string }> };
 
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_role')
-    .eq('id', user.id)
-    .single();
-
-  if (callerMember?.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
-  }
-
-  return { hasAccess: false };
+/** Loads access plus the deliverable, confirming it belongs to this feature and project. */
+async function load(userId: string, projectId: string, featureId: string, deliverableId: string) {
+  const [access, featureProjectId, [deliverable]] = await Promise.all([
+    getProjectAccess(userId, projectId),
+    getFeatureProjectId(featureId),
+    db
+      .select({ title: deliverables.title, member_id: deliverables.member_id })
+      .from(deliverables)
+      .where(and(eq(deliverables.id, deliverableId), eq(deliverables.entity_id, featureId)))
+      .limit(1),
+  ]);
+  const found = !!deliverable && featureProjectId === projectId;
+  return { access, deliverable: found ? deliverable : null };
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string, featureId: string, deliverableId: string }> }
-) {
+export async function GET(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, featureId, deliverableId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { access, deliverable } = await load(user.id, projectId, featureId, deliverableId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!deliverable) return NextResponse.json({ error: 'Deliverable not found' }, { status: 404 });
 
-    const { data, error } = await supabase
-      .from('reviews')
-      .select(`
-        *,
-        members (
-          id,
-          first_name,
-          last_name,
-          avatar_url
-        )
-      `)
-      .eq('deliverable_id', deliverableId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+    const data = await db
+      .select({ ...getTableColumns(reviews), members: memberSummary })
+      .from(reviews)
+      .leftJoin(members, eq(members.id, reviews.reviewer_id))
+      .where(eq(reviews.deliverable_id, deliverableId))
+      .orderBy(desc(reviews.created_at));
 
     return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'List reviews error');
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string, featureId: string, deliverableId: string }> }
-) {
+export async function POST(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, featureId, deliverableId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess, role } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-
-    if (role !== 'Organization Admin' && role !== 'Project Manager') {
+    const { access, deliverable } = await load(user.id, projectId, featureId, deliverableId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProject(access)) {
       return NextResponse.json({ error: 'Only Project Managers and Admins can review deliverables' }, { status: 403 });
     }
+    if (!deliverable) return NextResponse.json({ error: 'Deliverable not found' }, { status: 404 });
 
-    const body = await request.json();
-    const result = reviewSchema.safeParse(body);
+    const result = reviewSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    // 1. Insert Review
-    const { data: review, error: reviewError } = await supabase
-      .from('reviews')
-      .insert({
-        deliverable_id: deliverableId,
-        reviewer_id: user.id,
-        decision: result.data.decision,
-        comments: result.data.comments,
-        reviewed_at: new Date().toISOString()
-      })
-      .select()
-      .single();
+    const { decision, comments } = result.data;
 
-    if (reviewError) throw reviewError;
+    // The review and the deliverable's new status are saved together
+    const review = await db.transaction(async (tx) => {
+      const [review] = await tx
+        .insert(reviews)
+        .values({
+          deliverable_id: deliverableId,
+          reviewer_id: user.id,
+          decision,
+          comments,
+          reviewed_at: new Date(),
+        })
+        .returning();
 
-    // 2. Update Deliverable Status
-    // Even if migration 4 hasn't run yet, Supabase JS ignores TS errors for check constraints until execution
-    // It will pass if migration is applied.
-    const { error: updateError } = await supabase
-      .from('deliverables')
-      .update({ status: result.data.decision })
-      .eq('id', deliverableId);
-
-    if (updateError) throw updateError;
-
-    // 🚀 Inject Notification
-    const { data: deliverable } = await supabase.from('deliverables').select('title, member_id').eq('id', deliverableId).single();
-    if (deliverable?.member_id) {
-      await createNotification({
-        member_id: deliverable.member_id,
-        title: `Deliverable ${result.data.decision}`,
-        message: `Your deliverable "${deliverable.title}" was reviewed and marked as ${result.data.decision}.`,
-        type: 'Review',
-        entity_type: 'Deliverable',
-        entity_id: deliverableId
-      });
-    }
-
-    // Log the activity
-    await logActivity({
-      supabase,
-      projectId,
-      memberId: user.id,
-      action: 'Reviewed',
-      entityType: 'Deliverable',
-      entityId: deliverableId,
-      description: `Submitted a review (${result.data.decision}) for deliverable: ${deliverable?.title || 'Unknown'}`
+      await tx.update(deliverables).set({ status: decision }).where(eq(deliverables.id, deliverableId));
+      return review;
     });
 
+    await Promise.all([
+      deliverable.member_id &&
+        createNotification({
+          member_id: deliverable.member_id,
+          title: `Deliverable ${decision}`,
+          message: `Your deliverable "${deliverable.title}" was reviewed and marked as ${decision}.`,
+          type: 'Review',
+          entity_type: 'Deliverable',
+          entity_id: deliverableId
+        }),
+      logActivity({
+        projectId,
+        memberId: user.id,
+        action: 'Reviewed',
+        entityType: 'Deliverable',
+        entityId: deliverableId,
+        description: `Submitted a review (${decision}) for deliverable: ${deliverable.title}`
+      }),
+    ]);
+
     return NextResponse.json(review);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Create review error');
   }
 }

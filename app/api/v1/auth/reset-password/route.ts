@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { members, users } from '@/lib/db/schema';
+import { hashPassword } from '@/lib/auth/password';
+import { consumeToken } from '@/lib/auth/tokens';
+import { getSessionUser } from '@/lib/auth/session';
 
 const resetPasswordSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
+  // From the emailed reset link. Omit to change the signed-in user's password.
+  token: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -18,40 +25,38 @@ export async function POST(request: Request) {
       );
     }
 
-    const { password } = result.data;
-    const supabase = await createClient();
+    const { password, token } = result.data;
 
-    // updateUser will update the password of the currently authenticated user
-    // (In the invite/recovery flow, clicking the email link authenticates them into a recovery session)
-    const { data: updateData, error: updateError } = await supabase.auth.updateUser({
-      password: password,
-    });
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    let where;
+    if (token) {
+      const email = await consumeToken('reset', token);
+      if (!email) {
+        return NextResponse.json({ error: 'Reset link is invalid or has expired' }, { status: 400 });
+      }
+      where = eq(users.email, email);
+    } else {
+      const sessionUser = await getSessionUser();
+      if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      where = eq(users.id, sessionUser.id);
     }
 
-    // If this was an invite acceptance, we should update their status to 'Active'.
-    // Since they are now authenticated, RLS will allow them to update their own member record,
-    // assuming RLS policy allows members to update their status.
-    // However, it's safer to just let a DB trigger or a service function do this,
-    // or we can update it directly here.
-    const { error: statusError } = await supabase
-      .from('members')
-      .update({ status: 'Active' })
-      .eq('id', updateData.user.id)
-      .eq('status', 'Invited'); // only update if they were in the Invited state
+    const passwordHash = await hashPassword(password);
+    const [user] = await db
+      .update(users)
+      .set({ passwordHash, emailVerified: new Date() })
+      .where(where)
+      .returning({ id: users.id, email: users.email });
 
-    if (statusError) {
-      console.error('Failed to update member status to Active:', statusError);
-      // We don't fail the password reset if status update fails, but we log it.
-    }
+    if (!user) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
 
-    return NextResponse.json({
-      message: 'Password updated successfully',
-      user: updateData.user,
-    });
-  } catch (err: any) {
+    // An invitee who resets instead of accepting is activated the same way.
+    await db
+      .update(members)
+      .set({ status: 'Active' })
+      .where(and(eq(members.id, user.id), eq(members.status, 'Invited')));
+
+    return NextResponse.json({ message: 'Password updated successfully', user });
+  } catch (err) {
     console.error('Reset password exception:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

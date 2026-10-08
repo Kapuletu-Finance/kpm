@@ -1,0 +1,143 @@
+# Production stack for the VPS. See infra/README.md for the full runbook.
+#
+#   Database + PgBouncer (frontend on Vercel):
+#     docker compose -f docker-compose.prod.yml --env-file infra/.env.prod --profile vercel up -d
+#     Vercel functions ──TLS──▶ PgBouncer :6432 (transaction mode) ──▶ Postgres
+#
+#   Whole app on the VPS:
+#     docker compose -f docker-compose.prod.yml --env-file infra/.env.prod --profile app up -d --build
+#     Browser ──HTTPS──▶ Caddy :443 ──▶ app :3000 ──▶ Postgres (private network)
+#
+#   Migrations (run on every deploy that adds files to drizzle/migrations):
+#     docker compose -f docker-compose.prod.yml --env-file infra/.env.prod --profile tools run --rm migrate
+#
+# Postgres is never published to the internet; it listens on 127.0.0.1 for SSH tunnels only.
+
+name: kpm-prod
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kpm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-kpm}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      # Loopback only: reachable from the VPS itself / SSH tunnels, never the internet.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - kpm_pg_data:/var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - max_connections=100 # PgBouncer and the app pool stay well below this
+      - -c
+      - shared_buffers=512MB # ~25% of RAM on a 2GB VPS; raise with the box
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - log_min_duration_statement=500
+    shm_size: 256mb
+    networks: [db]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  # For serverless clients (Vercel). Not needed when the app runs on this VPS.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.26.0-p0
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "6432:6432"
+    volumes:
+      # Mounted config takes precedence over the image's env-generated config.
+      - ./infra/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./infra/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+      - ./infra/pgbouncer/tls:/etc/pgbouncer/tls:ro
+    networks: [db]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    profiles: [vercel]
+    logging: *logging
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL_DIRECT: postgres://${POSTGRES_USER:-kpm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kpm}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [db]
+    profiles: [tools]
+
+  app:
+    build:
+      context: .
+      target: runner
+      args:
+        NEXT_PUBLIC_APP_URL: https://${APP_DOMAIN:-localhost}
+        NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:-}
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Long-lived server: a direct pool to Postgres (lib/db sizes it at 20); no PgBouncer hop.
+      DATABASE_URL: postgres://${POSTGRES_USER:-kpm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kpm}
+      NEXT_PUBLIC_APP_URL: https://${APP_DOMAIN:-localhost}
+      AUTH_SECRET: ${AUTH_SECRET:-} # Auth.js refuses to start without it
+      AUTH_TRUST_HOST: "true" # behind Caddy
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:-}
+      POSTMARK_SERVER_TOKEN: ${POSTMARK_SERVER_TOKEN:-}
+      POSTMARK_FROM_EMAIL: ${POSTMARK_FROM_EMAIL:-}
+    networks: [db, web]
+    profiles: [app]
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on: [app]
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [web]
+    profiles: [app]
+    logging: *logging
+
+networks:
+  db:
+    driver: bridge
+  web:
+    driver: bridge
+
+volumes:
+  kpm_pg_data:
+  caddy_data:
+  caddy_config:

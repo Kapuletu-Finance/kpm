@@ -1,7 +1,7 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import { db } from '@/lib/db';
+import { activity_logs } from '@/lib/db/schema';
 
 type LogActivityParams = {
-  supabase: SupabaseClient<any, "public", any>;
   projectId: string;
   memberId: string;
   action: string;
@@ -11,7 +11,6 @@ type LogActivityParams = {
 };
 
 export async function logActivity({
-  supabase,
   projectId,
   memberId,
   action,
@@ -20,22 +19,16 @@ export async function logActivity({
   description
 }: LogActivityParams) {
   try {
-    const { error } = await supabase
-      .from('activity_logs')
-      .insert({
-        project_id: projectId,
-        member_id: memberId,
-        action,
-        entity_type: entityType,
-        entity_id: entityId,
-        description
-      });
-
-    if (error) {
-      console.error('Failed to log activity:', error);
-      // We don't throw to avoid breaking the main operation if logging fails
-    }
+    await db.insert(activity_logs).values({
+      project_id: projectId,
+      member_id: memberId,
+      action,
+      entity_type: entityType,
+      entity_id: entityId,
+      description,
+    });
   } catch (error) {
+    // Never fail the main operation because logging failed.
     console.error('Failed to log activity:', error);
   }
 }

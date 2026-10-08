@@ -1,57 +1,48 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_id, organization_role')
-    .eq('id', user.id)
-    .single();
-
-  if (!callerMember) return { hasAccess: false };
-
-  if (callerMember.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
-  }
-
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-
-  return { hasAccess: !!projectAccess, role: projectAccess?.project_role };
-}
+import { and, desc, eq, isNull, ne } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { features, modules, roadmaps } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    // Fetch all features in the project that do not have a sprint_id and are not Released
-    const { data: features, error: fetchError } = await supabase
-      .from('features')
-      .select('id, module_id, title, description, priority, status, modules!inner(name, roadmaps!inner(project_id))')
-      .eq('modules.roadmaps.project_id', projectId)
-      .is('sprint_id', null)
-      .neq('status', 'Released')
-      .order('created_at', { ascending: false });
+    // Project features not in a sprint and not yet released
+    const backlog = await db
+      .select({
+        id: features.id,
+        module_id: features.module_id,
+        title: features.title,
+        description: features.description,
+        priority: features.priority,
+        status: features.status,
+        module_name: modules.name,
+      })
+      .from(features)
+      .innerJoin(modules, eq(modules.id, features.module_id))
+      .innerJoin(roadmaps, eq(roadmaps.id, modules.roadmap_id))
+      .where(and(eq(roadmaps.project_id, projectId), isNull(features.sprint_id), ne(features.status, 'Released')))
+      .orderBy(desc(features.created_at));
 
-    if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 400 });
-
-    return NextResponse.json(features);
-  } catch (error: any) {
-    console.error('Fetch backlog features error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    // Keep the nested `modules.roadmaps` shape the UI reads
+    return NextResponse.json(
+      backlog.map(({ module_name, ...feature }) => ({
+        ...feature,
+        modules: { name: module_name, roadmaps: { project_id: projectId } },
+      })),
+    );
+  } catch (error) {
+    return handleRouteError(error, 'Fetch backlog features error');
   }
 }

@@ -1,9 +1,26 @@
-import { type NextRequest } from 'next/server';
-import { updateSession } from '@/lib/supabase/proxy';
+import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
 
-export async function proxy(request: NextRequest) {
-  return await updateSession(request);
-}
+const AUTH_ROUTES = ['/login', '/signup', '/accept-invite', '/forgot-password', '/reset-password'];
+
+// Reads the session from the signed JWT cookie: no database or network call per request.
+export const proxy = auth((request) => {
+  const { pathname } = request.nextUrl;
+  const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route));
+  const isSignedIn = !!request.auth?.user;
+
+  // API routes enforce auth themselves and answer with 401 JSON, not redirects
+  if (!isSignedIn && !isAuthRoute && !pathname.startsWith('/api/') && pathname !== '/') {
+    return NextResponse.redirect(new URL('/login', request.nextUrl));
+  }
+
+  // Signed-in users skip the auth screens (invite/reset links still work while signed in)
+  if (isSignedIn && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
+    return NextResponse.redirect(new URL('/workspace', request.nextUrl));
+  }
+
+  return NextResponse.next();
+});
 
 export const config = {
   matcher: [

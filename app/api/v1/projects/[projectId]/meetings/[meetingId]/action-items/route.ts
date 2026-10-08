@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { meeting_action_items } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getProjectAccess, meetingInProject, selectActionItems } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const actionItemSchema = z.object({
   description: z.string().min(1),
@@ -9,95 +14,62 @@ const actionItemSchema = z.object({
   due_date: z.string().optional().nullable(),
 });
 
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-    
-  if (projectAccess) return { hasAccess: true, role: projectAccess.project_role };
+type Params = { params: Promise<{ projectId: string, meetingId: string }> };
 
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_role')
-    .eq('id', user.id)
-    .single();
-
-  if (callerMember?.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
-  }
-
-  return { hasAccess: false };
+async function authorize(userId: string, projectId: string, meetingId: string) {
+  const [access, inProject] = await Promise.all([
+    getProjectAccess(userId, projectId),
+    meetingInProject(meetingId, projectId),
+  ]);
+  if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!inProject) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
+  return null;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string, meetingId: string }> }
-) {
+export async function GET(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, meetingId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const denied = await authorize(user.id, projectId, meetingId);
+    if (denied) return denied;
 
-    const { data, error } = await supabase
-      .from('meeting_action_items')
-      .select(`
-        *,
-        members:assigned_to(id, first_name, last_name, avatar_url)
-      `)
-      .eq('meeting_id', meetingId)
-      .order('created_at', { ascending: true });
+    const data = await selectActionItems(eq(meeting_action_items.meeting_id, meetingId))
+      .orderBy(asc(meeting_action_items.created_at));
 
-    if (error) throw error;
     return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'List action items error');
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string, meetingId: string }> }
-) {
+export async function POST(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, meetingId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const denied = await authorize(user.id, projectId, meetingId);
+    if (denied) return denied;
 
-    const body = await request.json();
-    const result = actionItemSchema.safeParse(body);
+    const result = actionItemSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    const { data, error } = await supabase
-      .from('meeting_action_items')
-      .insert({
+    const [created] = await db
+      .insert(meeting_action_items)
+      .values({
         meeting_id: meetingId,
         description: result.data.description,
         assigned_to: result.data.assigned_to || null,
         status: result.data.status,
         due_date: result.data.due_date || null
       })
-      .select(`
-        *,
-        members:assigned_to(id, first_name, last_name, avatar_url)
-      `)
-      .single();
+      .returning({ id: meeting_action_items.id });
 
-    if (error) throw error;
+    const [data] = await selectActionItems(eq(meeting_action_items.id, created.id));
     return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Create action item error');
   }
 }

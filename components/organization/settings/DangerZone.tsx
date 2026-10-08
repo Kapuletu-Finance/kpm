@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,7 +20,6 @@ import {
 import { Label } from '@/components/ui/label';
 
 export function DangerZone({ organization }: { organization: any }) {
-  const router = useRouter();
   const deleteMutation = useDeleteOrganization();
   const { memberProfile } = useAuth();
   
@@ -37,12 +35,10 @@ export function DangerZone({ organization }: { organization: any }) {
       await deleteMutation.mutateAsync();
       toast.success('Organization deleted successfully');
       
-      // Ensure supabase session is cleared locally as well
-      const { createClient } = await import('@/lib/supabase/client');
-      const supabase = createClient();
-      await supabase.auth.signOut();
-      
-      router.push('/login');
+      // The API already ended the session; this also clears it if that response was lost.
+      await fetch('/api/v1/auth/logout', { method: 'POST' }).catch(() => {});
+
+      window.location.href = '/login';
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete organization');
     }

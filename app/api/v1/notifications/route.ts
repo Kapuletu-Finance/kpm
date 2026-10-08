@@ -1,53 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, desc, eq, type SQL } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { notifications } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { handleRouteError } from '@/lib/api/http';
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient();
-    
-    // Auth check
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    // Get member ID for the current user
-    const { data: member } = await supabase
-      .from('members')
-      .select('id')
-      .eq('id', user.id)
-      .single();
-
-    if (!member) {
-      return NextResponse.json({ error: 'Member profile not found' }, { status: 404 });
-    }
-
-    // Parse query params
     const url = new URL(req.url);
     const filter = url.searchParams.get('filter'); // 'all', 'unread'
     const type = url.searchParams.get('type'); // 'Assignment', 'Review', 'Mention', etc.
 
-    // Fetch notifications
-    let query = supabase
-      .from('notifications')
-      .select('*')
-      .eq('member_id', member.id)
-      .order('created_at', { ascending: false });
+    // members.id === users.id, so the session user id is the member id
+    const conditions: SQL[] = [eq(notifications.member_id, user.id)];
+    if (filter === 'unread') conditions.push(eq(notifications.is_read, false));
+    if (type && type !== 'All') conditions.push(eq(notifications.type, type));
 
-    if (filter === 'unread') {
-      query = query.eq('is_read', false);
-    }
-    
-    if (type && type !== 'All') {
-      query = query.eq('type', type);
-    }
+    const inbox = await db
+      .select()
+      .from(notifications)
+      .where(and(...conditions))
+      .orderBy(desc(notifications.created_at))
+      .limit(200);
 
-    const { data: notifications, error } = await query.limit(200); // Get up to 200 for inbox
-
-    if (error) throw error;
-
-    return NextResponse.json(notifications);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(inbox);
+  } catch (error) {
+    return handleRouteError(error, 'List notifications error');
   }
 }

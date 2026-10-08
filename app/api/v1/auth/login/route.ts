@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { AuthError } from 'next-auth';
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
+import { signIn } from '@/auth';
+import { db } from '@/lib/db';
+import { users } from '@/lib/db/schema';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -20,29 +24,32 @@ export async function POST(request: Request) {
     }
 
     const { email, password } = result.data;
-    const supabase = await createClient();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      if (error.message.includes('Email not confirmed')) {
-        return NextResponse.json(
-          { error: 'Email not confirmed', requireVerification: true },
-          { status: 403 }
-        );
+    try {
+      // Runs the Credentials provider and sets the session cookie on this response.
+      await signIn('credentials', { email, password, redirect: false });
+    } catch (error) {
+      if (error instanceof AuthError) {
+        if ((error as AuthError & { code?: string }).code === 'email_not_verified') {
+          return NextResponse.json(
+            { error: 'Email not confirmed', requireVerification: true },
+            { status: 403 }
+          );
+        }
+        return NextResponse.json({ error: 'Invalid login credentials' }, { status: 401 });
       }
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      throw error;
     }
 
-    return NextResponse.json({
-      message: 'Login successful',
-      user: data.user,
-      session: data.session,
-    });
-  } catch (err: any) {
+    // The new session cookie is on the response, not this request, so read the user directly.
+    const [user] = await db
+      .select({ id: users.id, email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.email, email.trim().toLowerCase()))
+      .limit(1);
+
+    return NextResponse.json({ message: 'Login successful', user });
+  } catch (err) {
     console.error('Login exception:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

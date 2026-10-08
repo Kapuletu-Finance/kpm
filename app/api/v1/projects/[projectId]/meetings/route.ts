@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { asc, eq, getTableColumns } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { meeting_participants, meetings, members } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { canManageProject, getProjectAccess, memberSummary } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const meetingSchema = z.object({
   title: z.string().min(1),
@@ -14,57 +19,28 @@ const meetingSchema = z.object({
   end_time: z.string().datetime(),
 });
 
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-    
-  if (projectAccess) return { hasAccess: true, role: projectAccess.project_role };
-
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_role')
-    .eq('id', user.id)
-    .single();
-
-  if (callerMember?.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
-  }
-
-  return { hasAccess: false };
-}
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const { data, error } = await supabase
-      .from('meetings')
-      .select(`
-        *,
-        members:created_by(id, first_name, last_name, avatar_url)
-      `)
-      .eq('project_id', projectId)
-      .order('start_time', { ascending: true });
-
-    if (error) throw error;
+    const data = await db
+      .select({ ...getTableColumns(meetings), members: memberSummary })
+      .from(meetings)
+      .leftJoin(members, eq(members.id, meetings.created_by))
+      .where(eq(meetings.project_id, projectId))
+      .orderBy(asc(meetings.start_time));
 
     return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'List meetings error');
   }
 }
 
@@ -73,53 +49,46 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess, role } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-
-    if (role !== 'Organization Admin' && role !== 'Project Manager') {
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProject(access)) {
       return NextResponse.json({ error: 'Only Project Managers and Admins can schedule meetings' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const result = meetingSchema.safeParse(body);
+    const result = meetingSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    const { data: meeting, error: meetingError } = await supabase
-      .from('meetings')
-      .insert({
-        project_id: projectId,
-        sprint_id: result.data.sprint_id || null,
-        title: result.data.title,
-        objective: result.data.objective,
-        agenda: result.data.agenda,
-        type: result.data.type,
-        meeting_link: result.data.type === 'Online' ? result.data.meeting_link || null : null,
-        location: result.data.type === 'Physical' ? result.data.location || null : null,
-        start_time: result.data.start_time,
-        end_time: result.data.end_time,
-        created_by: user.id
-      })
-      .select()
-      .single();
+    const data = result.data;
 
-    if (meetingError) throw meetingError;
+    // The creator is added as the first participant
+    const meeting = await db.transaction(async (tx) => {
+      const [meeting] = await tx
+        .insert(meetings)
+        .values({
+          project_id: projectId,
+          sprint_id: data.sprint_id || null,
+          title: data.title,
+          objective: data.objective,
+          agenda: data.agenda,
+          type: data.type,
+          meeting_link: data.type === 'Online' ? data.meeting_link || null : null,
+          location: data.type === 'Physical' ? data.location || null : null,
+          start_time: new Date(data.start_time),
+          end_time: new Date(data.end_time),
+          created_by: user.id
+        })
+        .returning();
 
-    // Automatically add the creator as a participant
-    // Since meeting_participants is new, we use a raw query or insert if we can
-    // Ignoring errors if the table isn't created yet in case user hasn't run migration
-    await supabase.from('meeting_participants').insert({
-      meeting_id: meeting.id,
-      member_id: user.id
+      await tx.insert(meeting_participants).values({ meeting_id: meeting.id, member_id: user.id });
+      return meeting;
     });
 
     return NextResponse.json(meeting);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Create meeting error');
   }
 }

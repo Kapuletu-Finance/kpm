@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, eq, getTableColumns } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { members, project_members, projects } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getMember, getProjectMembership } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 import { sendProjectAssignmentEmail } from '@/lib/email.server';
 
 const updateProjectSchema = z.object({
@@ -20,72 +25,57 @@ const updateProjectSchema = z.object({
   cloudinary_folder: z.string().optional(),
 });
 
+const parseList = (value: string | null) => (value ? JSON.parse(value) : []);
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
-    
-    // Verify auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    // Get caller's role
-    const { data: callerMember, error: callerError } = await supabase
-      .from('members')
-      .select('organization_id, organization_role')
-      .eq('id', user.id)
-      .single();
-
-    if (callerError || !callerMember) {
+    const callerMember = await getMember(user.id);
+    if (!callerMember) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });
     }
 
-    // Fetch project
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('*, project_manager:project_manager_id(first_name, last_name, avatar_url, email)')
-      .eq('id', projectId)
-      .single();
+    const [row] = await db
+      .select({
+        ...getTableColumns(projects),
+        project_manager: {
+          first_name: members.first_name,
+          last_name: members.last_name,
+          avatar_url: members.avatar_url,
+          email: members.email,
+        },
+      })
+      .from(projects)
+      .leftJoin(members, eq(members.id, projects.project_manager_id))
+      .where(eq(projects.id, projectId))
+      .limit(1);
 
-    if (projectError || !project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
-
-    if (project.organization_id !== callerMember.organization_id) {
+    if (!row || row.organization_id !== callerMember.organization_id) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
     // If not Admin, verify they are assigned
     if (callerMember.organization_role !== 'Organization Admin') {
-      const { data: membership, error: memError } = await supabase
-        .from('project_members')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('member_id', user.id)
-        .single();
-        
-      if (memError || !membership) {
+      if (!(await getProjectMembership(projectId, user.id))) {
         return NextResponse.json({ error: 'Not assigned to this project' }, { status: 403 });
       }
     }
 
-    // Parse JSON strings back to arrays for frontend
-    const parsedProject = {
-      ...project,
-      business_goals: project.business_goals ? JSON.parse(project.business_goals) : [],
-      target_users: project.target_users ? JSON.parse(project.target_users) : [],
-      success_metrics: project.success_metrics ? JSON.parse(project.success_metrics) : [],
-    };
-
-    return NextResponse.json(parsedProject);
-  } catch (err: any) {
-    console.error('Get project exception:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    // Stored as JSON strings; the UI expects arrays
+    return NextResponse.json({
+      ...row,
+      business_goals: parseList(row.business_goals),
+      target_users: parseList(row.target_users),
+      success_metrics: parseList(row.success_metrics),
+    });
+  } catch (err) {
+    return handleRouteError(err, 'Get project exception');
   }
 }
 
@@ -94,48 +84,38 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
-    
-    // Verify auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    // Get caller's role
-    const { data: callerMember, error: callerError } = await supabase
-      .from('members')
-      .select('organization_id, organization_role, first_name, last_name')
-      .eq('id', user.id)
-      .single();
-
-    if (callerError || !callerMember) {
+    const callerMember = await getMember(user.id);
+    if (!callerMember) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });
     }
 
-    // Fetch project
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('organization_id, project_manager_id, name')
-      .eq('id', projectId)
-      .single();
+    const [project] = await db
+      .select({
+        organization_id: projects.organization_id,
+        project_manager_id: projects.project_manager_id,
+        name: projects.name,
+      })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
 
-    if (projectError || !project) {
+    if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Authorization checks
-    const isOrgAdmin = callerMember.organization_role === 'Organization Admin';
+    const isOrgAdmin =
+      callerMember.organization_role === 'Organization Admin' && callerMember.organization_id === project.organization_id;
     const isProjectManager = project.project_manager_id === user.id;
 
     if (!isOrgAdmin && !isProjectManager) {
       return NextResponse.json({ error: 'Insufficient permissions to update project' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const result = updateProjectSchema.safeParse(body);
-
+    const result = updateProjectSchema.safeParse(await request.json());
     if (!result.success) {
       return NextResponse.json(
         { error: 'Invalid payload', details: result.error.flatten() },
@@ -143,50 +123,45 @@ export async function PATCH(
       );
     }
 
-    const data = result.data;
-    
-    // Convert arrays to JSON strings if provided
-    const updatePayload: any = { ...data };
-    if (data.business_goals !== undefined) updatePayload.business_goals = data.business_goals ? JSON.stringify(data.business_goals) : null;
-    if (data.target_users !== undefined) updatePayload.target_users = data.target_users ? JSON.stringify(data.target_users) : null;
-    if (data.success_metrics !== undefined) updatePayload.success_metrics = data.success_metrics ? JSON.stringify(data.success_metrics) : null;
+    const { business_goals, target_users, success_metrics, project_manager_id, ...rest } = result.data;
+    const updatePayload: Partial<typeof projects.$inferInsert> = { ...rest };
 
-    // Handle Project Manager Reassignment
-    if (data.project_manager_id && data.project_manager_id !== project.project_manager_id) {
+    // Arrays are stored as JSON strings
+    if (business_goals !== undefined) updatePayload.business_goals = business_goals ? JSON.stringify(business_goals) : null;
+    if (target_users !== undefined) updatePayload.target_users = target_users ? JSON.stringify(target_users) : null;
+    if (success_metrics !== undefined) updatePayload.success_metrics = success_metrics ? JSON.stringify(success_metrics) : null;
+
+    // Project Manager reassignment
+    if (project_manager_id && project_manager_id !== project.project_manager_id) {
       if (!isOrgAdmin) {
         return NextResponse.json({ error: 'Only Organization Admins can reassign Project Managers' }, { status: 403 });
       }
 
-      // Verify the new PM exists and has correct role
-      const { data: pmMember, error: pmError } = await supabase
-        .from('members')
-        .select('id, organization_id, organization_role, first_name, last_name, email')
-        .eq('id', data.project_manager_id)
-        .single();
-        
-      if (pmError || !pmMember || pmMember.organization_id !== callerMember.organization_id) {
+      const pmMember = await getMember(project_manager_id);
+      if (!pmMember || pmMember.organization_id !== callerMember.organization_id) {
         return NextResponse.json({ error: 'Invalid Project Manager' }, { status: 400 });
       }
       if (pmMember.organization_role === 'Member') {
         return NextResponse.json({ error: 'Selected user is not a Project Manager or Admin' }, { status: 400 });
       }
 
-      updatePayload.project_manager_id = data.project_manager_id;
-      
-      // Upsert new PM into project_members
-      const { error: memberUpsertError } = await supabase
-        .from('project_members')
-        .upsert({
+      updatePayload.project_manager_id = project_manager_id;
+
+      // Make sure the new PM is on the team as Project Manager
+      await db
+        .insert(project_members)
+        .values({
           project_id: projectId,
-          member_id: data.project_manager_id,
+          member_id: project_manager_id,
           project_role: 'Project Manager',
-          review_authority: true
-        }, { onConflict: 'project_id, member_id' });
-        
-      if (memberUpsertError) {
-        console.error('Failed to update project members during reassignment', memberUpsertError);
-      } else if (pmMember.email) {
-        // Send email since reassignment was successful
+          review_authority: true,
+        })
+        .onConflictDoUpdate({
+          target: [project_members.project_id, project_members.member_id],
+          set: { project_role: 'Project Manager', review_authority: true },
+        });
+
+      if (pmMember.email) {
         sendProjectAssignmentEmail({
           toEmail: pmMember.email,
           pmName: pmMember.first_name,
@@ -195,25 +170,17 @@ export async function PATCH(
           projectId: projectId
         }).catch(e => console.error('Email failed:', e));
       }
-    } else {
-      delete updatePayload.project_manager_id;
     }
 
-    const { data: updatedProject, error: updateError } = await supabase
-      .from('projects')
-      .update(updatePayload)
-      .eq('id', projectId)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
+    const [updatedProject] = await db
+      .update(projects)
+      .set(updatePayload)
+      .where(eq(projects.id, projectId))
+      .returning();
 
     return NextResponse.json(updatedProject);
-  } catch (err: any) {
-    console.error('Update project exception:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (err) {
+    return handleRouteError(err, 'Update project exception');
   }
 }
 
@@ -222,38 +189,21 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
-    
-    // Verify auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { data: callerMember, error: callerError } = await supabase
-      .from('members')
-      .select('organization_id, organization_role')
-      .eq('id', user.id)
-      .single();
-
-    if (callerError || !callerMember || callerMember.organization_role !== 'Organization Admin') {
+    const callerMember = await getMember(user.id);
+    if (!callerMember || callerMember.organization_role !== 'Organization Admin' || !callerMember.organization_id) {
       return NextResponse.json({ error: 'Only Organization Admins can delete projects' }, { status: 403 });
     }
 
-    const { error: deleteError } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', projectId)
-      .eq('organization_id', callerMember.organization_id);
-
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 400 });
-    }
+    await db
+      .delete(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.organization_id, callerMember.organization_id)));
 
     return NextResponse.json({ message: 'Project deleted successfully' });
-  } catch (err: any) {
-    console.error('Delete project exception:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (err) {
+    return handleRouteError(err, 'Delete project exception');
   }
 }

@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { logActivity } from '@/lib/activity.server';
+import { and, desc, eq, getTableColumns } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { deliverables, members } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getFeatureProjectId, getProjectAccess, memberSummary } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
+import { logActivity } from '@/lib/activity.server';
 
 const deliverableSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -10,100 +15,65 @@ const deliverableSchema = z.object({
   description: z.string().optional(),
 });
 
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-    
-  if (projectAccess) return { hasAccess: true, role: projectAccess.project_role };
+type Params = { params: Promise<{ projectId: string, featureId: string }> };
 
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_role')
-    .eq('id', user.id)
-    .single();
-
-  if (callerMember?.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
+async function authorize(userId: string, projectId: string, featureId: string) {
+  const [access, featureProjectId] = await Promise.all([
+    getProjectAccess(userId, projectId),
+    getFeatureProjectId(featureId),
+  ]);
+  if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (featureProjectId !== projectId) {
+    return NextResponse.json({ error: 'Feature not found in this project' }, { status: 404 });
   }
-
-  return { hasAccess: false };
+  return null;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string, featureId: string }> }
-) {
+export async function GET(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, featureId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const denied = await authorize(user.id, projectId, featureId);
+    if (denied) return denied;
 
-    const { data, error } = await supabase
-      .from('deliverables')
-      .select(`
-        *,
-        members (
-          id,
-          first_name,
-          last_name,
-          avatar_url
-        )
-      `)
-      .eq('entity_type', 'Feature')
-      .eq('entity_id', featureId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+    const data = await db
+      .select({ ...getTableColumns(deliverables), members: memberSummary })
+      .from(deliverables)
+      .leftJoin(members, eq(members.id, deliverables.member_id))
+      .where(and(eq(deliverables.entity_type, 'Feature'), eq(deliverables.entity_id, featureId)))
+      .orderBy(desc(deliverables.created_at));
 
     return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'List deliverables error');
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string, featureId: string }> }
-) {
+export async function POST(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, featureId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const denied = await authorize(user.id, projectId, featureId);
+    if (denied) return denied;
 
-    const body = await request.json();
-    const result = deliverableSchema.safeParse(body);
+    const result = deliverableSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    const { data, error } = await supabase
-      .from('deliverables')
-      .insert({
+    const [data] = await db
+      .insert(deliverables)
+      .values({
         entity_type: 'Feature',
         entity_id: featureId,
         member_id: user.id,
         ...result.data,
       })
-      .select()
-      .single();
+      .returning();
 
-    if (error) throw error;
-
-    // Log the activity
     await logActivity({
-      supabase,
       projectId,
       memberId: user.id,
       action: 'Created',
@@ -113,7 +83,7 @@ export async function POST(
     });
 
     return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Create deliverable error');
   }
 }

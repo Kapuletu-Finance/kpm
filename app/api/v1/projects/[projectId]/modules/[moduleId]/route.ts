@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { modules, roadmaps } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { canManageProject, getModuleProjectId, getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const updateModuleSchema = z.object({
   roadmap_id: z.string().uuid().optional(),
@@ -12,131 +17,69 @@ const updateModuleSchema = z.object({
   order_index: z.number().optional(),
 });
 
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_id, organization_role')
-    .eq('id', user.id)
-    .single();
+type Params = { params: Promise<{ projectId: string; moduleId: string }> };
 
-  if (!callerMember) return false;
-
-  if (callerMember.organization_role === 'Organization Admin') {
-    return true;
-  }
-
-  const { data: pmAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .eq('project_role', 'Project Manager')
-    .single();
-
-  return !!pmAccess;
-}
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string; moduleId: string }> }
-) {
+export async function PATCH(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, moduleId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const hasPermission = await verifyAccess(supabase, user, projectId);
-    if (!hasPermission) {
+    if (!canManageProject(await getProjectAccess(user.id, projectId))) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const result = updateModuleSchema.safeParse(body);
-
+    const result = updateModuleSchema.safeParse(await request.json());
     if (!result.success) {
       return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
     }
 
-    const updates = result.data;
-
-    // Verify the module exists and belongs to a roadmap in this project
-    const { data: moduleCheck } = await supabase
-      .from('modules')
-      .select('id, roadmaps!inner(project_id)')
-      .eq('id', moduleId)
-      .eq('roadmaps.project_id', projectId)
-      .single();
-
-    if (!moduleCheck) {
+    if ((await getModuleProjectId(moduleId)) !== projectId) {
       return NextResponse.json({ error: 'Module not found in this project' }, { status: 404 });
     }
 
-    const { data: updatedModule, error: updateError } = await supabase
-      .from('modules')
-      .update(updates)
-      .eq('id', moduleId)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    // Moving to another phase: it must be in the same project
+    if (result.data.roadmap_id) {
+      const [phase] = await db
+        .select({ id: roadmaps.id })
+        .from(roadmaps)
+        .where(and(eq(roadmaps.id, result.data.roadmap_id), eq(roadmaps.project_id, projectId)))
+        .limit(1);
+      if (!phase) {
+        return NextResponse.json({ error: 'Roadmap phase not found in this project' }, { status: 404 });
+      }
     }
 
-    return NextResponse.json(updatedModule);
+    const [updatedModule] = await db
+      .update(modules)
+      .set(result.data)
+      .where(eq(modules.id, moduleId))
+      .returning();
 
-  } catch (error: any) {
-    console.error('Update module error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(updatedModule);
+  } catch (error) {
+    return handleRouteError(error, 'Update module error');
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string; moduleId: string }> }
-) {
+export async function DELETE(request: Request, { params }: Params) {
   try {
-    const supabase = await createClient();
     const { projectId, moduleId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const hasPermission = await verifyAccess(supabase, user, projectId);
-    if (!hasPermission) {
+    if (!canManageProject(await getProjectAccess(user.id, projectId))) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    // Verify module belongs to this project
-    const { data: moduleCheck } = await supabase
-      .from('modules')
-      .select('id, roadmaps!inner(project_id)')
-      .eq('id', moduleId)
-      .eq('roadmaps.project_id', projectId)
-      .single();
-
-    if (!moduleCheck) {
+    if ((await getModuleProjectId(moduleId)) !== projectId) {
       return NextResponse.json({ error: 'Module not found in this project' }, { status: 404 });
     }
 
-    const { error: deleteError } = await supabase
-      .from('modules')
-      .delete()
-      .eq('id', moduleId);
-
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 400 });
-    }
+    await db.delete(modules).where(eq(modules.id, moduleId));
 
     return NextResponse.json({ message: 'Module deleted successfully' });
-
-  } catch (error: any) {
-    console.error('Delete module error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Delete module error');
   }
 }

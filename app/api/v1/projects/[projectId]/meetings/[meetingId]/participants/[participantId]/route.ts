@@ -1,52 +1,33 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-    
-  if (projectAccess) return { hasAccess: true, role: projectAccess.project_role };
-
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_role')
-    .eq('id', user.id)
-    .single();
-
-  if (callerMember?.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
-  }
-
-  return { hasAccess: false };
-}
+import { and, eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { meeting_participants } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getProjectAccess, meetingInProject } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ projectId: string, meetingId: string, participantId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId, meetingId, participantId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const [access, inProject] = await Promise.all([
+      getProjectAccess(user.id, projectId),
+      meetingInProject(meetingId, projectId),
+    ]);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!inProject) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
 
-    const { error } = await supabase
-      .from('meeting_participants')
-      .delete()
-      .eq('meeting_id', meetingId)
-      .eq('member_id', participantId);
+    await db
+      .delete(meeting_participants)
+      .where(and(eq(meeting_participants.meeting_id, meetingId), eq(meeting_participants.member_id, participantId)));
 
-    if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Remove participant error');
   }
 }

@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { features, sprints } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { canManageProject, getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const createSprintSchema = z.object({
   name: z.string().min(1, "Sprint name is required"),
@@ -12,62 +17,41 @@ const createSprintSchema = z.object({
   status: z.enum(['Planning', 'Active', 'Review', 'Completed']).optional().default('Planning'),
 });
 
-async function verifyAccess(supabase: any, user: any, projectId: string) {
-  const { data: callerMember } = await supabase
-    .from('members')
-    .select('organization_id, organization_role')
-    .eq('id', user.id)
-    .single();
-
-  if (!callerMember) return { hasAccess: false };
-
-  if (callerMember.organization_role === 'Organization Admin') {
-    return { hasAccess: true, role: 'Organization Admin' };
-  }
-
-  const { data: projectAccess } = await supabase
-    .from('project_members')
-    .select('project_role')
-    .eq('project_id', projectId)
-    .eq('member_id', user.id)
-    .single();
-
-  return { hasAccess: !!projectAccess, role: projectAccess?.project_role };
-}
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const { data: sprints, error: fetchError } = await supabase
-      .from('sprints')
-      .select(`
-        *,
-        features (
-          id,
-          status,
-          priority
-        )
-      `)
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false });
+    const rows = await db
+      .select()
+      .from(sprints)
+      .where(eq(sprints.project_id, projectId))
+      .orderBy(desc(sprints.created_at));
 
-    if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 400 });
+    const sprintFeatures = rows.length
+      ? await db
+          .select({ sprint_id: features.sprint_id, id: features.id, status: features.status, priority: features.priority })
+          .from(features)
+          .where(inArray(features.sprint_id, rows.map((s) => s.id)))
+      : [];
 
-    return NextResponse.json(sprints);
-  } catch (error: any) {
-    console.error('Fetch sprints error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      rows.map((sprint) => ({
+        ...sprint,
+        features: sprintFeatures
+          .filter((f) => f.sprint_id === sprint.id)
+          .map((f) => ({ id: f.id, status: f.status, priority: f.priority })),
+      })),
+    );
+  } catch (error) {
+    return handleRouteError(error, 'Fetch sprints error');
   }
 }
 
@@ -76,36 +60,26 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { projectId } = await params;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { hasAccess, role } = await verifyAccess(supabase, user, projectId);
-    if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (role !== 'Organization Admin' && role !== 'Project Manager') {
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProject(access)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const result = createSprintSchema.safeParse(body);
+    const result = createSprintSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
-    const { data: sprint, error: createError } = await supabase
-      .from('sprints')
-      .insert({
-        project_id: projectId,
-        ...result.data,
-      })
-      .select()
-      .single();
-
-    if (createError) return NextResponse.json({ error: createError.message }, { status: 400 });
+    const [sprint] = await db
+      .insert(sprints)
+      .values({ project_id: projectId, ...result.data })
+      .returning();
 
     return NextResponse.json(sprint);
-  } catch (error: any) {
-    console.error('Create sprint error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Create sprint error');
   }
 }

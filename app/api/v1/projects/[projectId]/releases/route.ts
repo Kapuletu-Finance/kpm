@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { logActivity } from '@/lib/activity.server';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { features, releases } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
+import { logActivity } from '@/lib/activity.server';
 
 const releaseSchema = z.object({
   version: z.string().min(1, 'Version is required'),
@@ -16,49 +21,57 @@ const releaseSchema = z.object({
 export async function GET(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   try {
     const { projectId } = await params;
-    const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { data: releases, error } = await supabase
-      .from('releases')
-      .select(`
-        *,
-        features:features (
-          id,
-          title,
-          status
-        )
-      `)
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false });
+    if (!(await getProjectAccess(user.id, projectId)).hasAccess) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
-    if (error) throw error;
-    return NextResponse.json(releases);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const rows = await db
+      .select()
+      .from(releases)
+      .where(eq(releases.project_id, projectId))
+      .orderBy(desc(releases.created_at));
+
+    const releaseFeatures = rows.length
+      ? await db
+          .select({ release_id: features.release_id, id: features.id, title: features.title, status: features.status })
+          .from(features)
+          .where(inArray(features.release_id, rows.map((r) => r.id)))
+      : [];
+
+    return NextResponse.json(
+      rows.map((release) => ({
+        ...release,
+        features: releaseFeatures
+          .filter((f) => f.release_id === release.id)
+          .map((f) => ({ id: f.id, title: f.title, status: f.status })),
+      })),
+    );
+  } catch (error) {
+    return handleRouteError(error, 'List releases error');
   }
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   try {
     const { projectId } = await params;
-    const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const body = await req.json();
-    const result = releaseSchema.safeParse(body);
-    
+    if (!(await getProjectAccess(user.id, projectId)).hasAccess) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const result = releaseSchema.safeParse(await req.json());
     if (!result.success) {
       return NextResponse.json({ error: result.error.issues[0]?.message || 'Validation error' }, { status: 400 });
     }
 
-    const { data: release, error } = await supabase
-      .from('releases')
-      .insert({
+    const [release] = await db
+      .insert(releases)
+      .values({
         project_id: projectId,
         version: result.data.version,
         title: result.data.title || null,
@@ -68,14 +81,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
         release_date: result.data.release_date || null,
         status: result.data.status,
       })
-      .select()
-      .single();
+      .returning();
 
-    if (error) throw error;
-    
-    // Log the activity
     await logActivity({
-      supabase,
       projectId,
       memberId: user.id,
       action: 'Created',
@@ -85,7 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     });
 
     return NextResponse.json(release, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Create release error');
   }
 }

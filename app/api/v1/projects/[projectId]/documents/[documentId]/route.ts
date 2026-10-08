@@ -1,46 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { project_documents } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 import { deleteFromCloudinary } from '@/lib/cloudinary';
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ projectId: string, documentId: string }> }) {
   try {
     const { projectId, documentId } = await params;
-    const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    // Ensure user has access
-    const { data: member } = await supabase
-      .from('members')
-      .select('organization_role')
-      .eq('id', user.id)
-      .single();
+    const documentInProject = and(eq(project_documents.id, documentId), eq(project_documents.project_id, projectId));
 
-    const { data: projectMember } = await supabase
-      .from('project_members')
-      .select('project_role')
-      .eq('project_id', projectId)
-      .eq('member_id', user.id)
-      .single();
+    const [access, [doc]] = await Promise.all([
+      getProjectAccess(user.id, projectId),
+      db.select({ cloudinary_url: project_documents.cloudinary_url }).from(project_documents).where(documentInProject).limit(1),
+    ]);
 
-    if (!member && !projectMember) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
 
-    // Get the document to find the Cloudinary URL
-    const { data: doc, error: fetchError } = await supabase
-      .from('project_documents')
-      .select('cloudinary_url')
-      .eq('id', documentId)
-      .eq('project_id', projectId)
-      .single();
-      
-    if (fetchError || !doc) {
-      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
-    }
-
-    // Attempt to extract public_id and delete from Cloudinary
+    // Best effort: remove the file from Cloudinary (public_id is the path after the version segment)
     try {
       const urlParts = doc.cloudinary_url.split('/');
       const versionIndex = urlParts.findIndex((p: string) => p.startsWith('v') && !isNaN(parseInt(p.substring(1))));
@@ -55,17 +38,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ p
       console.warn('Failed to delete from Cloudinary, continuing with DB deletion...', cloudinaryError);
     }
 
-    // Delete from Database
-    const { error } = await supabase
-      .from('project_documents')
-      .delete()
-      .eq('id', documentId)
-      .eq('project_id', projectId);
+    await db.delete(project_documents).where(documentInProject);
 
-    if (error) throw error;
-    
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Delete document error');
   }
 }

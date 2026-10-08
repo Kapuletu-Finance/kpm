@@ -1,0 +1,5 @@
+; Copy to userlist.txt (gitignored) and replace the secret.
+; Use the SCRAM verifier, not the plaintext password. Read it from Postgres:
+;   docker compose -f docker-compose.prod.yml exec postgres \
+;     psql -U kpm -d kpm -Atc "SELECT rolpassword FROM pg_authid WHERE rolname = 'kpm'"
+"kpm" "SCRAM-SHA-256$4096:REPLACE_ME"

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { features, releases } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const releaseUpdateSchema = z.object({
   title: z.string().optional(),
@@ -11,63 +16,59 @@ const releaseUpdateSchema = z.object({
   status: z.enum(['Planned', 'Staging', 'Released', 'Rolled Back']).optional(),
 });
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ projectId: string, releaseId: string }> }) {
+type Params = { params: Promise<{ projectId: string, releaseId: string }> };
+
+const releaseInProject = (releaseId: string, projectId: string) =>
+  and(eq(releases.id, releaseId), eq(releases.project_id, projectId));
+
+export async function GET(req: NextRequest, { params }: Params) {
   try {
     const { projectId, releaseId } = await params;
-    const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { data: release, error } = await supabase
-      .from('releases')
-      .select(`
-        *,
-        features:features (
-          id,
-          title,
-          status,
-          priority
-        )
-      `)
-      .eq('id', releaseId)
-      .eq('project_id', projectId)
-      .single();
+    const [access, [release], releaseFeatures] = await Promise.all([
+      getProjectAccess(user.id, projectId),
+      db.select().from(releases).where(releaseInProject(releaseId, projectId)).limit(1),
+      db
+        .select({ id: features.id, title: features.title, status: features.status, priority: features.priority })
+        .from(features)
+        .where(eq(features.release_id, releaseId)),
+    ]);
 
-    if (error) throw error;
-    return NextResponse.json(release);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!release) return NextResponse.json({ error: 'Release not found' }, { status: 404 });
+
+    return NextResponse.json({ ...release, features: releaseFeatures });
+  } catch (error) {
+    return handleRouteError(error, 'Fetch release error');
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ projectId: string, releaseId: string }> }) {
+export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const { projectId, releaseId } = await params;
-    const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const body = await req.json();
-    const result = releaseUpdateSchema.safeParse(body);
-    
+    if (!(await getProjectAccess(user.id, projectId)).hasAccess) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const result = releaseUpdateSchema.safeParse(await req.json());
     if (!result.success) {
       return NextResponse.json({ error: result.error.issues[0]?.message || 'Validation error' }, { status: 400 });
     }
 
-    const { data: release, error } = await supabase
-      .from('releases')
-      .update(result.data)
-      .eq('id', releaseId)
-      .eq('project_id', projectId)
-      .select()
-      .single();
+    const [release] = await db
+      .update(releases)
+      .set(result.data)
+      .where(releaseInProject(releaseId, projectId))
+      .returning();
 
-    if (error) throw error;
-    
+    if (!release) return NextResponse.json({ error: 'Release not found' }, { status: 404 });
     return NextResponse.json(release);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Update release error');
   }
 }

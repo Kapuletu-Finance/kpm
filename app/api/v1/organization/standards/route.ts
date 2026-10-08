@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { organization_standards } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getMember } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 const updateStandardsSchema = z.object({
   engineering_standards: z.array(z.string()).optional(),
@@ -15,121 +20,101 @@ const updateStandardsSchema = z.object({
   working_principles: z.array(z.string()).optional(),
 });
 
-export async function GET(request: Request) {
-  try {
-    const supabase = await createClient();
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+const JSON_FIELDS = [
+  'engineering_standards', 'coding_standards', 'review_standards', 'qa_standards',
+  'meeting_templates', 'project_templates', 'role_templates', 'definition_of_done', 'working_principles',
+] as const;
+
+type Standards = typeof organization_standards.$inferSelect;
+
+// Lists are stored as jsonb arrays. Rows written under Supabase hold them as
+// JSON-encoded strings, so decode those on the way out.
+function normalize(standards: Standards) {
+  const parsed: Record<string, unknown> = { ...standards };
+  for (const field of JSON_FIELDS) {
+    let value = parsed[field];
+    if (typeof value === 'string') {
+      try {
+        value = JSON.parse(value);
+      } catch {
+        value = [];
+      }
     }
+    // Column default is {} (from the original schema); the UI works with lists
+    parsed[field] = Array.isArray(value) ? value : [];
+  }
+  return parsed;
+}
 
-    const { data: member, error: memberError } = await supabase
-      .from('members')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single();
+export async function GET() {
+  try {
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    if (memberError || !member) {
+    const member = await getMember(user.id);
+    if (!member || !member.organization_id) {
       return NextResponse.json({ error: 'Member profile not found' }, { status: 404 });
     }
 
-    // Try to get standards, if they don't exist, create an empty record
-    let { data: standards, error: standardsError } = await supabase
-      .from('organization_standards')
-      .select('*')
-      .eq('organization_id', member.organization_id)
-      .single();
+    let [standards] = await db
+      .select()
+      .from(organization_standards)
+      .where(eq(organization_standards.organization_id, member.organization_id))
+      .limit(1);
 
-    if (standardsError && standardsError.code === 'PGRST116') {
-      // Create empty standards record
-      const { data: newStandards, error: createError } = await supabase
-        .from('organization_standards')
-        .insert([{ organization_id: member.organization_id }])
-        .select()
-        .single();
-        
-      if (createError) {
-        return NextResponse.json({ error: 'Failed to initialize standards' }, { status: 500 });
-      }
-      standards = newStandards;
-    } else if (standardsError) {
-      return NextResponse.json({ error: 'Failed to fetch standards' }, { status: 500 });
+    // First visit: create an empty standards record
+    if (!standards) {
+      [standards] = await db
+        .insert(organization_standards)
+        .values({ organization_id: member.organization_id })
+        .returning();
     }
 
-    // Parse JSON fields
-    const parsedStandards = { ...standards };
-    const jsonFields = [
-      'engineering_standards', 'coding_standards', 'review_standards', 'qa_standards', 
-      'meeting_templates', 'project_templates', 'role_templates', 'definition_of_done', 'working_principles'
-    ];
-    
-    for (const field of jsonFields) {
-      if (typeof parsedStandards[field] === 'string') {
-        try {
-          parsedStandards[field] = JSON.parse(parsedStandards[field]);
-        } catch {
-          parsedStandards[field] = [];
-        }
-      }
-    }
-
-    return NextResponse.json(parsedStandards);
-  } catch (err: any) {
-    console.error('Organization Standards GET exception:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(normalize(standards));
+  } catch (err) {
+    return handleRouteError(err, 'Organization Standards GET exception');
   }
 }
 
 export async function PATCH(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { data: member } = await supabase
-      .from('members')
-      .select('organization_id, organization_role')
-      .eq('id', user.id)
-      .single();
-
-    if (!member || member.organization_role !== 'Organization Admin') {
+    const member = await getMember(user.id);
+    if (!member || member.organization_role !== 'Organization Admin' || !member.organization_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const validatedData = updateStandardsSchema.parse(body);
-
-    // Transform array to stringified JSON if needed
-    const payload: any = {};
-    for (const [key, value] of Object.entries(validatedData)) {
-      if (Array.isArray(value)) {
-        payload[key] = JSON.stringify(value);
-      } else if (value !== undefined) {
-        payload[key] = value;
-      }
+    const result = updateStandardsSchema.safeParse(await request.json());
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues }, { status: 400 });
     }
 
-    const { data: updatedStandards, error: updateError } = await supabase
-      .from('organization_standards')
-      .update(payload)
-      .eq('organization_id', member.organization_id)
-      .select()
-      .single();
+    const payload = Object.fromEntries(
+      Object.entries(result.data).filter(([, value]) => value !== undefined),
+    ) as Partial<typeof organization_standards.$inferInsert>;
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    if (Object.keys(payload).length === 0) {
+      return NextResponse.json({ error: 'No changes provided' }, { status: 400 });
     }
 
-    return NextResponse.json(updatedStandards);
-  } catch (err: any) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.issues }, { status: 400 });
+    let [updatedStandards] = await db
+      .update(organization_standards)
+      .set(payload)
+      .where(eq(organization_standards.organization_id, member.organization_id))
+      .returning();
+
+    // Not created yet (standards page never opened): create it with these values
+    if (!updatedStandards) {
+      [updatedStandards] = await db
+        .insert(organization_standards)
+        .values({ organization_id: member.organization_id, ...payload })
+        .returning();
     }
-    console.error('Organization Standards PATCH exception:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+
+    return NextResponse.json(normalize(updatedStandards));
+  } catch (err) {
+    return handleRouteError(err, 'Organization Standards PATCH exception');
   }
 }

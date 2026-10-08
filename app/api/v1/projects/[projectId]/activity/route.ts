@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { count, desc, eq, getTableColumns } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { activity_logs, members } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getProjectAccess } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
 export async function GET(
   req: NextRequest,
@@ -7,63 +12,41 @@ export async function GET(
 ) {
   try {
     const { projectId } = await params;
-    const supabase = await createClient();
-    
-    // Auth check
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
+
+    if (!(await getProjectAccess(user.id, projectId)).hasAccess) {
+      return NextResponse.json({ error: 'Not authorized for this project' }, { status: 403 });
     }
 
-    // Verify user is part of the project
-    const { data: projectMember } = await supabase
-      .from('project_members')
-      .select('member_id')
-      .eq('project_id', projectId)
-      .limit(1)
-      .single();
-
-    if (!projectMember) {
-      // also check if they are an admin in the org... for simplicity we assume project member or org admin
-      const { data: member } = await supabase
-        .from('members')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-      
-      if (!member || (member.role !== 'admin' && member.role !== 'owner')) {
-        return NextResponse.json({ error: 'Not authorized for this project' }, { status: 403 });
-      }
-    }
-
-    // Parse query params for pagination
     const url = new URL(req.url);
-    const limit = parseInt(url.searchParams.get('limit') || '50');
-    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '50') || 50, 1), 200);
+    const offset = Math.max(parseInt(url.searchParams.get('offset') || '0') || 0, 0);
 
-    // Fetch activity logs
-    const { data: logs, error, count } = await supabase
-      .from('activity_logs')
-      .select(`
-        *,
-        member:members(id, first_name, last_name, avatar_url, role:organization_role)
-      `, { count: 'exact' })
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    const where = eq(activity_logs.project_id, projectId);
+    const [logs, [{ total }]] = await Promise.all([
+      db
+        .select({
+          ...getTableColumns(activity_logs),
+          member: {
+            id: members.id,
+            first_name: members.first_name,
+            last_name: members.last_name,
+            avatar_url: members.avatar_url,
+            role: members.organization_role,
+          },
+        })
+        .from(activity_logs)
+        .leftJoin(members, eq(members.id, activity_logs.member_id))
+        .where(where)
+        .orderBy(desc(activity_logs.created_at))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(activity_logs).where(where),
+    ]);
 
-    if (error) throw error;
-
-    // Get user profiles from Clerk/Auth for the members if needed, 
-    // but typically we can just return the data and let the frontend cross-reference the team hook.
-    
-    return NextResponse.json({
-      data: logs,
-      count,
-      offset,
-      limit
-    });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data: logs, count: total, offset, limit });
+  } catch (error) {
+    return handleRouteError(error, 'Fetch project activity error');
   }
 }

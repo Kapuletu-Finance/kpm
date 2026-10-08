@@ -1,76 +1,56 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server';
+import { and, eq, inArray } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { features, modules, projects, roadmaps } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { getMember } from '@/lib/db/queries';
+import { handleRouteError } from '@/lib/api/http';
 
-export async function GET(req: NextRequest) {
+// Feature statuses that need a manager's attention
+const ACTION_NEEDED_STATUSES = ['In Review', 'Blocked'];
+
+export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
 
-    const { data: memberProfile } = await supabase
-      .from('members')
-      .select('organization_id, organization_role')
-      .eq('id', user.id)
-      .single();
-
-    if (!memberProfile || !['Organization Admin', 'Project Manager'].includes(memberProfile.organization_role)) {
+    const memberProfile = await getMember(user.id);
+    if (!memberProfile || !['Organization Admin', 'Project Manager'].includes(memberProfile.organization_role ?? '')) {
       return NextResponse.json({ error: 'Forbidden. Requires Manager role.' }, { status: 403 });
     }
 
-    // 1. Projects managed by user
-    const { data: managedProjects, count: managedCount } = await supabase
-      .from('projects')
-      .select('id, name, status, priority, end_date', { count: 'exact' })
-      .eq('project_manager_id', user.id);
-
-    const projectIds = managedProjects?.map(p => p.id) || [];
-    
-    let actionNeededFeatures: any[] = [];
-    let pendingReviews: any[] = [];
-    
-    if (projectIds.length > 0) {
-      // Run dependent queries concurrently
-      const [featuresRes, deliverablesRes] = await Promise.all([
-        supabase
-          .from('features')
-          .select('id, title, status, priority, modules!inner(roadmaps!inner(project_id, projects(name)))')
-          .in('modules.roadmaps.project_id', projectIds)
-          .in('status', ['In Review', 'Blocked'])
-          .limit(10),
-          
-        supabase
-          .from('deliverables')
-          .select('id, title, status, entity_type, entity_id, member_id, members(first_name, last_name)')
-          .eq('status', 'In Review')
-          .limit(10)
-      ]);
-      
-      const featuresData = featuresRes.data;
-      const deliverablesData = deliverablesRes.data;
-      
-      actionNeededFeatures = (featuresData || []).map(f => ({
-        id: f.id,
-        title: f.title,
-        status: f.status,
-        priority: f.priority,
-        project_id: (f.modules as any)?.roadmaps?.project_id,
-        project_name: (f.modules as any)?.roadmaps?.projects?.name
-      }));
-      
-      pendingReviews = deliverablesData || [];
-    }
+    const [managedProjects, actionNeededFeatures] = await Promise.all([
+      db
+        .select({ id: projects.id, name: projects.name, status: projects.status, priority: projects.priority, end_date: projects.end_date })
+        .from(projects)
+        .where(eq(projects.project_manager_id, user.id)),
+      db
+        .select({
+          id: features.id,
+          title: features.title,
+          status: features.status,
+          priority: features.priority,
+          project_id: roadmaps.project_id,
+          project_name: projects.name,
+        })
+        .from(features)
+        .innerJoin(modules, eq(modules.id, features.module_id))
+        .innerJoin(roadmaps, eq(roadmaps.id, modules.roadmap_id))
+        .innerJoin(projects, eq(projects.id, roadmaps.project_id))
+        .where(and(eq(projects.project_manager_id, user.id), inArray(features.status, ACTION_NEEDED_STATUSES)))
+        .limit(10),
+    ]);
 
     return NextResponse.json({
       stats: {
-        managedProjects: managedCount || 0,
+        managedProjects: managedProjects.length,
         actionNeededFeatures: actionNeededFeatures.length,
-        pendingReviews: pendingReviews.length,
+        pendingReviews: 0,
       },
-      managedProjects: managedProjects || [],
+      managedProjects,
       actionNeededFeatures,
     });
-
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleRouteError(error, 'Manager dashboard error');
   }
 }

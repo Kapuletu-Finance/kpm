@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { members, organizations, users } from '@/lib/db/schema';
+import { hashPassword } from '@/lib/auth/password';
+import { issueToken } from '@/lib/auth/tokens';
+import { sendVerificationEmail } from '@/lib/email.server';
 
 const signupSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -16,40 +20,20 @@ export async function POST(request: Request) {
     const result = signupSchema.safeParse(body);
 
     if (!result.success) {
-      console.error('Zod validation error:', result.error.flatten());
       return NextResponse.json(
         { error: 'Invalid payload', details: result.error.flatten() },
         { status: 400 }
       );
     }
 
-    const { email, password, fullName, organizationName } = result.data;
-    const supabase = await createClient(); // Current user context
-    const adminSupabase = createAdminClient(); // Bypasses RLS for initial org setup
+    const { password, fullName, organizationName } = result.data;
+    const email = result.data.email.trim().toLowerCase();
 
-    // 1. Create the user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-        emailRedirectTo: `${new URL(request.url).origin}/api/v1/auth/callback`,
-      },
-    });
-
-    if (authError) {
-      console.error('Supabase auth signup error:', authError);
-      return NextResponse.json({ error: authError.message }, { status: 400 });
+    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (existing) {
+      return NextResponse.json({ error: 'User already registered' }, { status: 400 });
     }
 
-    const user = authData.user;
-    if (!user) {
-      return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
-    }
-
-    // 2. Create Organization using Admin Client
     const slug =
       organizationName
         .toLowerCase()
@@ -58,49 +42,46 @@ export async function POST(request: Request) {
       '-' +
       Math.random().toString(36).substring(2, 6);
 
-    const { data: orgData, error: orgError } = await adminSupabase
-      .from('organizations')
-      .insert({
-        name: organizationName,
-        slug: slug,
-      })
-      .select('id')
-      .single();
-
-    if (orgError || !orgData) {
-      console.error('Org creation error:', orgError);
-      return NextResponse.json({ error: 'Failed to create organization' }, { status: 500 });
-    }
-
-    // 3. Create Member linking User to Organization
-    const nameParts = fullName.split(' ');
+    const nameParts = fullName.trim().split(' ');
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(' ') || ' ';
+    const passwordHash = await hashPassword(password);
 
-    const { error: memberError } = await adminSupabase
-      .from('members')
-      .insert({
+    // User, organization and admin membership are created atomically.
+    const { user, organizationId } = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(users)
+        .values({ email, name: fullName.trim(), passwordHash })
+        .returning({ id: users.id, email: users.email });
+
+      const [org] = await tx
+        .insert(organizations)
+        .values({ name: organizationName, slug })
+        .returning({ id: organizations.id });
+
+      await tx.insert(members).values({
         id: user.id,
-        organization_id: orgData.id,
+        organization_id: org.id,
         first_name: firstName,
         last_name: lastName,
-        email: email,
+        email,
         organization_role: 'Organization Admin',
         status: 'Active',
       });
 
-    if (memberError) {
-      console.error('Member creation error:', memberError);
-      return NextResponse.json({ error: 'Failed to assign organization role' }, { status: 500 });
-    }
+      return { user, organizationId: org.id };
+    });
+
+    const token = await issueToken('verify', email);
+    await sendVerificationEmail({ toEmail: email, fullName: fullName.trim(), token });
 
     return NextResponse.json({
       message: 'Signup successful',
-      user: user,
-      organizationId: orgData.id,
-      session: authData.session,
+      user,
+      organizationId,
+      session: null,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Signup exception:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

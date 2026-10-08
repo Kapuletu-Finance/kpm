@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '@/lib/db';
+import { members } from '@/lib/db/schema';
+import { requireApiUser } from '@/lib/auth/session';
+import { handleRouteError } from '@/lib/api/http';
 
 const updateProfileSchema = z.object({
   first_name: z.string().min(1).optional(),
@@ -11,33 +15,26 @@ const updateProfileSchema = z.object({
 
 export async function PATCH(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, response } = await requireApiUser();
+    if (response) return response;
+
+    const result = updateProfileSchema.safeParse(await request.json());
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues }, { status: 400 });
     }
 
-    const body = await request.json();
-    const validatedData = updateProfileSchema.parse(body);
+    const [updatedProfile] = await db
+      .update(members)
+      .set(result.data)
+      .where(eq(members.id, user.id))
+      .returning();
 
-    const { data: updatedProfile, error: updateError } = await supabase
-      .from('members')
-      .update(validatedData)
-      .eq('id', user.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    if (!updatedProfile) {
+      return NextResponse.json({ error: 'Member profile not found' }, { status: 404 });
     }
 
     return NextResponse.json(updatedProfile);
-  } catch (err: any) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.issues }, { status: 400 });
-    }
-    console.error('Profile PATCH exception:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (err) {
+    return handleRouteError(err, 'Profile PATCH exception');
   }
 }
