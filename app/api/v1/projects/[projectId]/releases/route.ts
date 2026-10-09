@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { features, releases } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { getProjectAccess } from '@/lib/db/queries';
+import { canManageProject, getProjectAccess } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
 import { logActivity } from '@/lib/activity.server';
 
@@ -60,8 +60,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     const { user, response } = await requireApiUser();
     if (response) return response;
 
-    if (!(await getProjectAccess(user.id, projectId)).hasAccess) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Releases are planned by managers
+    if (!canManageProject(await getProjectAccess(user.id, projectId))) {
+      return NextResponse.json({ error: 'Only Project Managers and Admins can create releases' }, { status: 403 });
     }
 
     const result = releaseSchema.safeParse(await req.json());

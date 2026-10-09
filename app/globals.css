@@ -95,6 +95,12 @@
   --input: #e5e7eb;
   --ring: #097255;
 
+  /* Charts. Series green is the brand hue stepped to pass the chart palette checks
+     (chroma, lightness band, 3:1 on the card surface); reference = plan/target lines. */
+  --viz-series-1: #0a7d5c;
+  --viz-reference: #9ca3af;
+  --viz-grid: #e5e7eb;
+
   --radius: 0.5rem;
 }
 
@@ -135,6 +141,10 @@
   --border: #262626;
   --input: #262626;
   --ring: #097255;
+
+  --viz-series-1: #0f9e6e;
+  --viz-reference: #6b7280;
+  --viz-grid: #262626;
 }
 
 @layer base {

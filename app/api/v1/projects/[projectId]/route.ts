@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { members, project_members, projects } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { getMember, getProjectMembership } from '@/lib/db/queries';
+import { canManageProject, getMember, getProjectAccess } from '@/lib/db/queries';
+import { logActivity } from '@/lib/activity.server';
 import { handleRouteError } from '@/lib/api/http';
 import { sendProjectAssignmentEmail } from '@/lib/email.server';
 
@@ -25,7 +26,16 @@ const updateProjectSchema = z.object({
   cloudinary_folder: z.string().optional(),
 });
 
-const parseList = (value: string | null) => (value ? JSON.parse(value) : []);
+// Stored as JSON-encoded string arrays; older rows may hold plain text.
+function parseList(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [String(parsed)];
+  } catch {
+    return [value];
+  }
+}
 
 export async function GET(
   request: Request,
@@ -60,11 +70,10 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // If not Admin, verify they are assigned
-    if (callerMember.organization_role !== 'Organization Admin') {
-      if (!(await getProjectMembership(projectId, user.id))) {
-        return NextResponse.json({ error: 'Not assigned to this project' }, { status: 403 });
-      }
+    // Org Admins see every project in their org; everyone else must be on the team
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) {
+      return NextResponse.json({ error: 'Not assigned to this project' }, { status: 403 });
     }
 
     // Stored as JSON strings; the UI expects arrays
@@ -73,6 +82,9 @@ export async function GET(
       business_goals: parseList(row.business_goals),
       target_users: parseList(row.target_users),
       success_metrics: parseList(row.success_metrics),
+      // The caller's effective role, so the UI gates actions the same way the API does
+      current_user_role: access.role,
+      can_manage: canManageProject(access),
     });
   } catch (err) {
     return handleRouteError(err, 'Get project exception');
@@ -107,11 +119,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    const isOrgAdmin =
-      callerMember.organization_role === 'Organization Admin' && callerMember.organization_id === project.organization_id;
-    const isProjectManager = project.project_manager_id === user.id;
+    // Org Admins and any of the project's Project Managers may update it
+    const access = await getProjectAccess(user.id, projectId);
+    const isOrgAdmin = access.role === 'Organization Admin';
 
-    if (!isOrgAdmin && !isProjectManager) {
+    if (!canManageProject(access)) {
       return NextResponse.json({ error: 'Insufficient permissions to update project' }, { status: 403 });
     }
 
@@ -147,6 +159,14 @@ export async function PATCH(
 
       updatePayload.project_manager_id = project_manager_id;
 
+      // The previous lead stays on the team as a Member
+      if (project.project_manager_id) {
+        await db
+          .update(project_members)
+          .set({ project_role: 'Member' })
+          .where(and(eq(project_members.project_id, projectId), eq(project_members.member_id, project.project_manager_id)));
+      }
+
       // Make sure the new PM is on the team as Project Manager
       await db
         .insert(project_members)
@@ -178,6 +198,15 @@ export async function PATCH(
       .where(eq(projects.id, projectId))
       .returning();
 
+    await logActivity({
+      projectId,
+      memberId: user.id,
+      action: 'Updated',
+      entityType: 'Project',
+      entityId: projectId,
+      description: rest.status ? `Changed project status to ${rest.status}` : 'Updated project details',
+    });
+
     return NextResponse.json(updatedProject);
   } catch (err) {
     return handleRouteError(err, 'Update project exception');
@@ -198,9 +227,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Only Organization Admins can delete projects' }, { status: 403 });
     }
 
-    await db
+    const [deleted] = await db
       .delete(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.organization_id, callerMember.organization_id)));
+      .where(and(eq(projects.id, projectId), eq(projects.organization_id, callerMember.organization_id)))
+      .returning({ id: projects.id });
+
+    if (!deleted) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ message: 'Project deleted successfully' });
   } catch (err) {

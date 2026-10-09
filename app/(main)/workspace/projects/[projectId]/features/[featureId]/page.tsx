@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { FeatureDependencies } from '@/components/projects/FeatureDependencies';
 import { DeliverablesList } from '@/components/projects/DeliverablesList';
 import { CommentsSection } from '@/components/projects/CommentsSection';
 import { useAuth } from '@/store/AuthContext';
@@ -71,6 +72,10 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ proje
   const isAdmin = memberProfile?.organization_role === 'Organization Admin';
   const isPM = teamMembers?.some((m: any) => m.member_id === memberProfile?.id && m.project_role === 'Project Manager');
   const canManage = isAdmin || isPM;
+  // Assignees may move their own feature through the workflow (except to Released)
+  const isAssignee = feature.feature_members?.some((fm: any) => fm.member_id === memberProfile?.id);
+  const canChangeStatus = canManage || isAssignee;
+  const canReview = canManage || !!teamMembers?.some((m: any) => m.member_id === memberProfile?.id && m.review_authority);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -101,7 +106,7 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ proje
     try {
       await updateFeatureMutation.mutateAsync({ featureId, data: { status } });
       toast.success('Status updated');
-    } catch (e) { toast.error('Update failed'); }
+    } catch (e: any) { toast.error(e?.message || 'Update failed'); }
   };
 
   const handleUpdatePriority = async (priority: any) => {
@@ -275,7 +280,7 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ proje
           </div>
           
           {/* Deliverables Section */}
-          <DeliverablesList projectId={projectId} featureId={featureId} canManage={canManage} />
+          <DeliverablesList projectId={projectId} featureId={featureId} canManage={canManage} canReview={canReview} />
 
           {/* Comments Section */}
           <CommentsSection projectId={projectId} entityType="Feature" entityId={featureId} canManage={canManage} />
@@ -291,13 +296,13 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ proje
             
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground font-medium">Status</label>
-              <Select value={feature.status} onValueChange={handleUpdateStatus}>
+              <Select value={feature.status} onValueChange={handleUpdateStatus} disabled={!canChangeStatus}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {['Idea', 'Requirements', 'Design', 'Development', 'Integration', 'Testing', 'Approval', 'Released'].map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                    <SelectItem key={s} value={s} disabled={s === 'Released' && !canManage}>{s}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -305,7 +310,7 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ proje
 
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground font-medium">Priority</label>
-              <Select value={feature.priority} onValueChange={handleUpdatePriority}>
+              <Select value={feature.priority} onValueChange={handleUpdatePriority} disabled={!canManage}>
                 <SelectTrigger>
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${getPriorityColor(feature.priority).split(' ')[0]}`} />
@@ -346,6 +351,8 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ proje
               </div>
             </div>
           </div>
+
+          <FeatureDependencies projectId={projectId} featureId={featureId} canManage={canManage} />
 
           {/* Assignees Card */}
           <div className="bg-card border rounded-xl p-5 shadow-sm">

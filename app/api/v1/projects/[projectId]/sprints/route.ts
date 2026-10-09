@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { features, sprints } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
 import { canManageProject, getProjectAccess } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
+import { logActivity } from '@/lib/activity.server';
 
 const createSprintSchema = z.object({
   name: z.string().min(1, "Sprint name is required"),
@@ -73,10 +74,34 @@ export async function POST(
     const result = createSprintSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
+    const { start_date, end_date, status } = result.data;
+    if (start_date && end_date && end_date < start_date) {
+      return NextResponse.json({ error: 'The sprint must end on or after its start date' }, { status: 400 });
+    }
+    if (status === 'Active') {
+      const [active] = await db
+        .select({ name: sprints.name })
+        .from(sprints)
+        .where(and(eq(sprints.project_id, projectId), eq(sprints.status, 'Active')))
+        .limit(1);
+      if (active) {
+        return NextResponse.json({ error: `"${active.name}" is already active. Complete it before starting another sprint.` }, { status: 409 });
+      }
+    }
+
     const [sprint] = await db
       .insert(sprints)
       .values({ project_id: projectId, ...result.data })
       .returning();
+
+    await logActivity({
+      projectId,
+      memberId: user.id,
+      action: 'Created',
+      entityType: 'Sprint',
+      entityId: sprint.id,
+      description: `Created sprint: ${sprint.name}`,
+    });
 
     return NextResponse.json(sprint);
   } catch (error) {

@@ -7,10 +7,13 @@ import { db } from '@/lib/db';
 import { accounts, rateLimits, sessions, users, verificationTokens } from '@/lib/db/schema';
 import { clientIp, hitRateLimits } from '@/lib/auth/rate-limit';
 import { DUMMY_HASH, verifyPassword } from '@/lib/auth/password';
+import { getAccountState } from '@/lib/auth/status';
 
 declare module 'next-auth' {
   interface Session {
     user: { id: string } & DefaultSession['user'];
+    /** When the session token was issued (seconds since epoch); compared with users.sessions_valid_after. */
+    issuedAt?: number;
   }
 }
 
@@ -20,6 +23,10 @@ class EmailNotVerified extends CredentialsSignin {
 
 class RateLimited extends CredentialsSignin {
   code = 'rate_limited';
+}
+
+class AccountDeactivated extends CredentialsSignin {
+  code = 'account_deactivated';
 }
 
 const credentialsSchema = z.object({
@@ -79,6 +86,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const ok = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
         if (!user || !user.passwordHash || !ok) return null;
         if (!user.emailVerified) throw new EmailNotVerified();
+        if ((await getAccountState(user.id)).deactivated) throw new AccountDeactivated();
 
         await Promise.all([
           db.update(users).set({ lastSignInAt: new Date() }).where(eq(users.id, user.id)),
@@ -97,6 +105,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     session({ session, token }) {
       if (token.sub) session.user.id = token.sub;
+      if (typeof token.iat === 'number') session.issuedAt = token.iat;
       return session;
     },
   },

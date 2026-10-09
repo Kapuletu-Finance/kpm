@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { requireApiUser } from '@/lib/auth/session';
 import { InviteError, inviteMember } from '@/lib/auth/invite.server';
 import { getMemberWithOrgName } from '@/lib/db/queries';
+import { logActivity } from '@/lib/activity.server';
 
 const inviteSchema = z.object({
   email: z.string().email('Invalid email address'),
-  role: z.enum(['Project Manager', 'Member']),
+  role: z.enum(['Organization Admin', 'Project Manager', 'Member']),
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
 });
@@ -44,6 +45,15 @@ export async function POST(request: Request) {
       organizationRole: role,
       inviterName: `${callerMember.first_name} ${callerMember.last_name}`.trim(),
       organizationName: callerMember.organization_name || 'your organization',
+    });
+
+    await logActivity({
+      organizationId: callerMember.organization_id,
+      memberId: user.id,
+      action: 'Invited',
+      entityType: 'Member',
+      entityId: invitedUser.id,
+      description: `Invited ${firstName} ${lastName} (${email}) as ${role}`,
     });
 
     return NextResponse.json({

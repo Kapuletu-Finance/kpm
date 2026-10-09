@@ -6,6 +6,7 @@ import { organization_standards } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
 import { getMember } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
+import { logActivity } from '@/lib/activity.server';
 
 const updateStandardsSchema = z.object({
   engineering_standards: z.array(z.string()).optional(),
@@ -88,7 +89,7 @@ export async function PATCH(request: Request) {
 
     const result = updateStandardsSchema.safeParse(await request.json());
     if (!result.success) {
-      return NextResponse.json({ error: result.error.issues }, { status: 400 });
+      return NextResponse.json({ error: result.error.issues[0]?.message || 'Invalid payload', details: result.error.issues }, { status: 400 });
     }
 
     const payload = Object.fromEntries(
@@ -112,6 +113,15 @@ export async function PATCH(request: Request) {
         .values({ organization_id: member.organization_id, ...payload })
         .returning();
     }
+
+    await logActivity({
+      organizationId: member.organization_id,
+      memberId: user.id,
+      action: 'Updated',
+      entityType: 'Standards',
+      entityId: updatedStandards.id,
+      description: `Updated organization standards (${Object.keys(payload).join(', ')})`,
+    });
 
     return NextResponse.json(normalize(updatedStandards));
   } catch (err) {

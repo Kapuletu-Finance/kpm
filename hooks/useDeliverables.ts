@@ -9,7 +9,7 @@ export interface Deliverable {
   type: 'GitHub PR' | 'Figma Link' | 'API Doc' | 'Document' | 'Video' | 'Screenshot' | 'Demo' | 'Commit' | 'Deployment URL';
   link: string;
   description: string | null;
-  status: 'Pending' | 'Submitted' | 'Reviewed' | 'Approved' | 'Rejected';
+  status: 'Pending' | 'Submitted' | 'Reviewed' | 'Approved' | 'Rejected' | 'Changes Requested';
   created_at: string;
   members?: {
     id: string;
@@ -41,7 +41,10 @@ export function useSubmitDeliverable(projectId: string, featureId: string) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to submit deliverable');
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to submit deliverable');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -59,6 +62,28 @@ export function useDeleteDeliverable(projectId: string, featureId: string) {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete deliverable');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'features', featureId, 'deliverables'] });
+    },
+  });
+}
+
+export function useResubmitDeliverable(projectId: string, featureId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ deliverableId, data }: { deliverableId: string; data: { link?: string; description?: string } }) => {
+      const res = await fetch(`/api/v1/projects/${projectId}/features/${featureId}/deliverables/${deliverableId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to resubmit deliverable');
+      }
       return res.json();
     },
     onSuccess: () => {

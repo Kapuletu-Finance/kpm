@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { meeting_participants, meetings, members } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { canManageProject, getProjectAccess, memberSummary } from '@/lib/db/queries';
+import { canManageProject, getProjectAccess, memberSummary, sprintInProject } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
 
 const meetingUpdateSchema = z.object({
@@ -30,7 +30,7 @@ async function loadMeeting(userId: string, projectId: string, meetingId: string)
   const [access, [meeting]] = await Promise.all([
     getProjectAccess(userId, projectId),
     db
-      .select({ created_by: meetings.created_by })
+      .select({ created_by: meetings.created_by, start_time: meetings.start_time, end_time: meetings.end_time })
       .from(meetings)
       .where(meetingInProject(meetingId, projectId))
       .limit(1),
@@ -85,6 +85,16 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     const { start_time, end_time, ...rest } = result.data;
+
+    if (rest.sprint_id && !(await sprintInProject(rest.sprint_id, projectId))) {
+      return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
+    }
+    const nextStart = start_time ? new Date(start_time) : meeting.start_time;
+    const nextEnd = end_time ? new Date(end_time) : meeting.end_time;
+    if (nextStart && nextEnd && nextEnd <= nextStart) {
+      return NextResponse.json({ error: 'The meeting must end after it starts' }, { status: 400 });
+    }
+
     const [data] = await db
       .update(meetings)
       .set({

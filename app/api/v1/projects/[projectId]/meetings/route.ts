@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { meeting_participants, meetings, members } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { canManageProject, getProjectAccess, memberSummary } from '@/lib/db/queries';
+import { canManageProject, getProjectAccess, memberSummary, sprintInProject } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
+import { logActivity } from '@/lib/activity.server';
 
 const meetingSchema = z.object({
   title: z.string().min(1),
@@ -64,6 +65,13 @@ export async function POST(
 
     const data = result.data;
 
+    if (new Date(data.end_time) <= new Date(data.start_time)) {
+      return NextResponse.json({ error: 'The meeting must end after it starts' }, { status: 400 });
+    }
+    if (data.sprint_id && !(await sprintInProject(data.sprint_id, projectId))) {
+      return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
+    }
+
     // The creator is added as the first participant
     const meeting = await db.transaction(async (tx) => {
       const [meeting] = await tx
@@ -85,6 +93,15 @@ export async function POST(
 
       await tx.insert(meeting_participants).values({ meeting_id: meeting.id, member_id: user.id });
       return meeting;
+    });
+
+    await logActivity({
+      projectId,
+      memberId: user.id,
+      action: 'Scheduled',
+      entityType: 'Meeting',
+      entityId: meeting.id,
+      description: `Scheduled meeting: ${meeting.title}`,
     });
 
     return NextResponse.json(meeting);

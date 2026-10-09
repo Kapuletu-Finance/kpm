@@ -72,6 +72,7 @@ export async function POST(request: Request, { params }: Params) {
         description: result.data.description,
         priority: result.data.priority || 'Medium',
         status: result.data.status || 'Idea',
+        completed_at: result.data.status === 'Released' ? new Date() : null,
         start_date: result.data.start_date || null,
         due_date: result.data.due_date || null,
       })

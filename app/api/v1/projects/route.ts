@@ -7,6 +7,7 @@ import { requireApiUser } from '@/lib/auth/session';
 import { getMember } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
 import { sendProjectAssignmentEmail } from '@/lib/email.server';
+import { logActivity } from '@/lib/activity.server';
 
 const projectSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
@@ -96,6 +97,15 @@ export async function POST(request: Request) {
       });
 
       return project;
+    });
+
+    await logActivity({
+      projectId: newProject.id,
+      memberId: user.id,
+      action: 'Created',
+      entityType: 'Project',
+      entityId: newProject.id,
+      description: `Created project: ${newProject.name}`,
     });
 
     // Email the PM when an Admin assigned someone else

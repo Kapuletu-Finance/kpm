@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { comments } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { canManageProject, getProjectAccess } from '@/lib/db/queries';
+import { canManageProject, entityInProject, getProjectAccess } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
 
 export async function DELETE(
@@ -17,11 +17,18 @@ export async function DELETE(
 
     const [access, [existingComment]] = await Promise.all([
       getProjectAccess(user.id, projectId),
-      db.select({ member_id: comments.member_id }).from(comments).where(eq(comments.id, commentId)).limit(1),
+      db
+        .select({ member_id: comments.member_id, entity_type: comments.entity_type, entity_id: comments.entity_id })
+        .from(comments)
+        .where(eq(comments.id, commentId))
+        .limit(1),
     ]);
 
     if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (!existingComment) return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
+    // The comment must be on something in this project
+    if (!existingComment || !(await entityInProject(existingComment.entity_type, existingComment.entity_id, projectId))) {
+      return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
+    }
 
     // Managers, or the author, may delete
     if (!canManageProject(access) && existingComment.member_id !== user.id) {

@@ -1,6 +1,6 @@
 import { and, eq, getTableColumns, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { features, meeting_action_items, meetings, members, modules, organizations, project_members, projects, roadmaps } from '@/lib/db/schema';
+import { deliverables, features, meeting_action_items, meetings, members, modules, organizations, project_members, projects, roadmaps, sprints } from '@/lib/db/schema';
 
 // Small, frequently used lookups shared by the API routes. Each is a single
 // primary-key or unique-index probe.
@@ -66,7 +66,9 @@ export async function getProjectAccess(userId: string, projectId: string): Promi
       .limit(1),
   ]);
 
-  if (!member || !project) return { hasAccess: false, member };
+  if (!member || !project || member.status === 'Inactive') return { hasAccess: false, member };
+  // A project is only reachable from inside its own organization
+  if (member.organization_id !== project.organization_id) return { hasAccess: false, member };
   if (member.organization_role === 'Organization Admin' && member.organization_id === project.organization_id) {
     return { hasAccess: true, role: 'Organization Admin', member };
   }
@@ -108,6 +110,109 @@ export async function meetingInProject(meetingId: string, projectId: string): Pr
     .where(and(eq(meetings.id, meetingId), eq(meetings.project_id, projectId)))
     .limit(1);
   return !!row;
+}
+
+/**
+ * The projects a member oversees: every project in the organization for an Org Admin,
+ * otherwise the projects where they are a Project Manager. Empty for everyone else.
+ */
+export async function getOverseenProjectIds(member: Member): Promise<string[]> {
+  if (!member.organization_id || member.status === 'Inactive') return [];
+  if (member.organization_role === 'Organization Admin') {
+    const rows = await db.select({ id: projects.id }).from(projects).where(eq(projects.organization_id, member.organization_id));
+    return rows.map((r) => r.id);
+  }
+  const rows = await db
+    .select({ id: project_members.project_id })
+    .from(project_members)
+    .innerJoin(projects, eq(projects.id, project_members.project_id))
+    .where(
+      and(
+        eq(project_members.member_id, member.id),
+        eq(project_members.project_role, 'Project Manager'),
+        eq(projects.organization_id, member.organization_id),
+      ),
+    );
+  return rows.map((r) => r.id!).filter(Boolean);
+}
+
+/** Whether the caller may review deliverables: managers, or team members granted review authority. */
+export async function canReviewInProject(access: ProjectAccess, userId: string, projectId: string): Promise<boolean> {
+  if (!access.hasAccess) return false;
+  if (canManageProject(access)) return true;
+  const membership = await getProjectMembership(projectId, userId);
+  return !!membership?.review_authority;
+}
+
+/** Member ids who should be told about new submissions: the project's PMs and reviewers. */
+export async function getProjectReviewerIds(projectId: string): Promise<string[]> {
+  const rows = await db
+    .select({ member_id: project_members.member_id, project_role: project_members.project_role, review_authority: project_members.review_authority })
+    .from(project_members)
+    .where(eq(project_members.project_id, projectId));
+  return rows
+    .filter((r) => r.member_id && (r.project_role === 'Project Manager' || r.review_authority))
+    .map((r) => r.member_id!);
+}
+
+/** Whether a member belongs to the same organization as the project. */
+export async function memberInProjectOrg(memberId: string, projectId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: members.id })
+    .from(members)
+    .innerJoin(projects, eq(projects.organization_id, members.organization_id))
+    .where(and(eq(members.id, memberId), eq(projects.id, projectId)))
+    .limit(1);
+  return !!row;
+}
+
+/** Whether a sprint exists and belongs to the project. */
+export async function sprintInProject(sprintId: string, projectId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: sprints.id })
+    .from(sprints)
+    .where(and(eq(sprints.id, sprintId), eq(sprints.project_id, projectId)))
+    .limit(1);
+  return !!row;
+}
+
+/** The project a deliverable belongs to, resolved through its parent entity. */
+async function getDeliverableProjectId(deliverableId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ entity_type: deliverables.entity_type, entity_id: deliverables.entity_id })
+    .from(deliverables)
+    .where(eq(deliverables.id, deliverableId))
+    .limit(1);
+  if (!row) return null;
+  if (row.entity_type === 'Project') return row.entity_id;
+  if (row.entity_type === 'Feature') return getFeatureProjectId(row.entity_id);
+  const [meeting] = await db
+    .select({ project_id: meetings.project_id })
+    .from(meetings)
+    .where(eq(meetings.id, row.entity_id))
+    .limit(1);
+  return meeting?.project_id ?? null;
+}
+
+/**
+ * Whether a polymorphic entity (as used by comments and deliverables) belongs to the project.
+ * Routes scoped to a project must check this before reading or writing by entity id.
+ */
+export async function entityInProject(entityType: string, entityId: string, projectId: string): Promise<boolean> {
+  switch (entityType) {
+    case 'Project':
+      return entityId === projectId;
+    case 'Feature':
+      return (await getFeatureProjectId(entityId)) === projectId;
+    case 'Module':
+      return (await getModuleProjectId(entityId)) === projectId;
+    case 'Meeting':
+      return meetingInProject(entityId, projectId);
+    case 'Deliverable':
+      return (await getDeliverableProjectId(entityId)) === projectId;
+    default:
+      return false;
+  }
 }
 
 /** Meeting action items with the assignee summary embedded as `members`. */

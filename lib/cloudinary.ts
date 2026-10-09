@@ -6,6 +6,21 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+// Files that run in a browser when opened from the upload's public URL.
+const BLOCKED_EXTENSIONS = /\.(html?|xhtml|svg|js|mjs|exe|bat|cmd|sh|ps1|msi|dll|jar|php)$/i;
+const BLOCKED_TYPES = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|application\/(x-)?javascript|text\/javascript)/i;
+
+/** Returns an error message when a file must not be uploaded, else null. */
+export function validateUpload(file: File | null): string | null {
+  if (!file || typeof file === 'string') return 'No file provided';
+  if (file.size === 0) return 'The file is empty';
+  if (file.size > MAX_UPLOAD_BYTES) return `Files must be ${MAX_UPLOAD_BYTES / 1024 / 1024} MB or smaller`;
+  if (BLOCKED_EXTENSIONS.test(file.name) || BLOCKED_TYPES.test(file.type)) return 'This file type is not allowed';
+  return null;
+}
+
 export async function uploadToCloudinary(buffer: Buffer, folder: string, filename: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(

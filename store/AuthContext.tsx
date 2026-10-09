@@ -22,7 +22,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     fetch('/api/v1/auth/me', { cache: 'no-store' })
-      .then(async (res) => (res.ok ? res.json() : { user: null, memberProfile: null }))
+      .then(async (res) => {
+        if (res.ok) return res.json();
+        // The cookie is still present but the server rejected it (password changed elsewhere,
+        // account deactivated). Clear it, or the proxy keeps treating the browser as signed in.
+        const body = await res.json().catch(() => ({}));
+        if (!cancelled && (body.reason === 'revoked' || body.reason === 'deactivated')) {
+          await fetch('/api/v1/auth/logout', { method: 'POST' }).catch(() => {});
+          window.location.href = body.reason === 'deactivated' ? '/login?error=Account+deactivated' : '/login';
+        }
+        return { user: null, memberProfile: null };
+      })
       .then((data) => {
         if (cancelled) return;
         setUser(data.user);

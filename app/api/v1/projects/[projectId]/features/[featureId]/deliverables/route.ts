@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { deliverables, members } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { getFeatureProjectId, getProjectAccess, memberSummary } from '@/lib/db/queries';
+import { getFeatureProjectId, getProjectAccess, getProjectReviewerIds, memberSummary } from '@/lib/db/queries';
+import { createNotification } from '@/lib/notifications.server';
 import { handleRouteError } from '@/lib/api/http';
 import { logActivity } from '@/lib/activity.server';
 
@@ -70,8 +71,25 @@ export async function POST(request: Request, { params }: Params) {
         entity_id: featureId,
         member_id: user.id,
         ...result.data,
+        status: 'Submitted',
+        submitted_at: new Date(),
       })
       .returning();
+
+    // Tell the project's reviewers there is something to review
+    const reviewers = (await getProjectReviewerIds(projectId)).filter((id) => id !== user.id);
+    await Promise.all(
+      reviewers.map((member_id) =>
+        createNotification({
+          member_id,
+          title: 'New deliverable to review',
+          message: `"${data.title}" was submitted for review.`,
+          type: 'Review',
+          entity_type: 'Deliverable',
+          entity_id: data.id,
+        }),
+      ),
+    );
 
     await logActivity({
       projectId,

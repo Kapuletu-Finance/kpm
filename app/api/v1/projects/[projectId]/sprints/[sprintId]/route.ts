@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { feature_members, features, members, sprints } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
 import { canManageProject, getProjectAccess } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
+import { logActivity } from '@/lib/activity.server';
 
 const updateSprintSchema = z.object({
   name: z.string().min(1).optional(),
@@ -89,6 +90,31 @@ export async function PATCH(request: Request, { params }: Params) {
     const result = updateSprintSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
+    const [current] = await db
+      .select({ status: sprints.status, start_date: sprints.start_date, end_date: sprints.end_date })
+      .from(sprints)
+      .where(sprintInProject(sprintId, projectId))
+      .limit(1);
+    if (!current) return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
+
+    const start = result.data.start_date !== undefined ? result.data.start_date : current.start_date;
+    const end = result.data.end_date !== undefined ? result.data.end_date : current.end_date;
+    if (start && end && end < start) {
+      return NextResponse.json({ error: 'The sprint must end on or after its start date' }, { status: 400 });
+    }
+
+    // One active sprint per project
+    if (result.data.status === 'Active' && current.status !== 'Active') {
+      const [active] = await db
+        .select({ name: sprints.name })
+        .from(sprints)
+        .where(and(eq(sprints.project_id, projectId), eq(sprints.status, 'Active'), ne(sprints.id, sprintId)))
+        .limit(1);
+      if (active) {
+        return NextResponse.json({ error: `"${active.name}" is already active. Complete it before starting another sprint.` }, { status: 409 });
+      }
+    }
+
     const [sprint] = await db
       .update(sprints)
       .set(result.data)
@@ -96,6 +122,17 @@ export async function PATCH(request: Request, { params }: Params) {
       .returning();
 
     if (!sprint) return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
+
+    if (result.data.status && result.data.status !== current.status) {
+      await logActivity({
+        projectId,
+        memberId: user.id,
+        action: 'Updated',
+        entityType: 'Sprint',
+        entityId: sprintId,
+        description: `Moved sprint "${sprint.name}" to ${sprint.status}`,
+      });
+    }
 
     return NextResponse.json(sprint);
   } catch (error) {

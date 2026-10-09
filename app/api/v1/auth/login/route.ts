@@ -37,6 +37,12 @@ export async function POST(request: Request) {
             { status: 429, headers: { 'Retry-After': '900' } }
           );
         }
+        if (code === 'account_deactivated') {
+          return NextResponse.json(
+            { error: 'Your account has been deactivated. Contact your organization admin.' },
+            { status: 403 }
+          );
+        }
         if (code === 'email_not_verified') {
           return NextResponse.json(
             { error: 'Email not confirmed', requireVerification: true },

@@ -7,7 +7,7 @@ import { useProjectTeam } from '@/hooks/useProjectTeam';
 import { useSprints } from '@/hooks/useSprints';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Timer, Plus, Calendar, ArrowRight, Play } from 'lucide-react';
+import { Timer, Plus, Calendar, ArrowRight, Play, BarChart3 } from 'lucide-react';
 import { CreateSprintDialog } from '@/components/projects/CreateSprintDialog';
 import { format, parseISO } from 'date-fns';
 
@@ -103,9 +103,14 @@ export default function SprintsHubPage({ params }: { params: Promise<{ projectId
                     </p>
                   )}
 
-                  <Button className="w-full bg-success hover:bg-success/90" onClick={() => router.push(`/workspace/projects/${projectId}/sprints/${sprint.id}/board`)}>
-                    <Play className="w-4 h-4 mr-2" /> Go to Board
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button className="flex-1 bg-success hover:bg-success/90" onClick={() => router.push(`/workspace/projects/${projectId}/sprints/${sprint.id}/board`)}>
+                      <Play className="w-4 h-4 mr-2" /> Go to Board
+                    </Button>
+                    <Button variant="outline" onClick={() => router.push(`/workspace/projects/${projectId}/sprints/${sprint.id}/insights`)} title="Burndown, retrospective and completion">
+                      <BarChart3 className="w-4 h-4 mr-2" /> Insights
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -146,13 +151,20 @@ export default function SprintsHubPage({ params }: { params: Promise<{ projectId
 
         {/* Completed Sprints */}
         {completedSprints.length > 0 && (
-          <div className="space-y-4 opacity-75">
+          <div className="space-y-4">
             <h3 className="text-lg font-semibold border-b pb-2">Completed</h3>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {completedSprints.map(sprint => (
-                <div key={sprint.id} className="bg-muted/30 border rounded-xl p-5">
+                <div
+                  key={sprint.id}
+                  className="bg-muted/30 border rounded-xl p-5 cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => router.push(`/workspace/projects/${projectId}/sprints/${sprint.id}/insights`)}
+                >
                   <div className="flex justify-between items-start mb-2">
                     {getStatusBadge(sprint.status)}
+                    <span className="text-xs text-primary font-medium flex items-center gap-1">
+                      <BarChart3 className="w-3.5 h-3.5" /> Insights & retro
+                    </span>
                   </div>
                   <h4 className="font-bold mb-1">{sprint.name}</h4>
                   <div className="flex items-center text-xs text-muted-foreground">

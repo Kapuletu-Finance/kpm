@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { deliverables, members, reviews } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { canManageProject, getFeatureProjectId, getProjectAccess, memberSummary } from '@/lib/db/queries';
+import { canReviewInProject, getFeatureProjectId, getProjectAccess, memberSummary } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
 import { createNotification } from '@/lib/notifications.server';
 import { logActivity } from '@/lib/activity.server';
@@ -62,10 +62,14 @@ export async function POST(request: Request, { params }: Params) {
 
     const { access, deliverable } = await load(user.id, projectId, featureId, deliverableId);
     if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (!canManageProject(access)) {
-      return NextResponse.json({ error: 'Only Project Managers and Admins can review deliverables' }, { status: 403 });
+    if (!(await canReviewInProject(access, user.id, projectId))) {
+      return NextResponse.json({ error: 'Only Project Managers, Admins and designated reviewers can review deliverables' }, { status: 403 });
     }
     if (!deliverable) return NextResponse.json({ error: 'Deliverable not found' }, { status: 404 });
+    // Nobody approves their own work
+    if (deliverable.member_id === user.id) {
+      return NextResponse.json({ error: 'You cannot review your own deliverable' }, { status: 403 });
+    }
 
     const result = reviewSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });

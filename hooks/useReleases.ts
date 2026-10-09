@@ -87,6 +87,23 @@ export function useUpdateRelease(projectId: string) {
   });
 }
 
+export function useDeleteRelease(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (releaseId: string) => {
+      const res = await fetch(`/api/v1/projects/${projectId}/releases/${releaseId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete release');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'releases'] });
+    },
+  });
+}
+
 export function useAssignFeaturesToRelease(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { feature_checklists, feature_members, features, members } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { canManageProject, getFeatureProjectId, getProjectAccess } from '@/lib/db/queries';
+import { canManageProject, getFeatureProjectId, getProjectAccess, sprintInProject } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
 import { logActivity } from '@/lib/activity.server';
 
@@ -82,9 +82,6 @@ export async function PATCH(request: Request, { params }: Params) {
 
     const access = await getProjectAccess(user.id, projectId);
     if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (!canManageProject(access)) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
-    }
 
     if ((await getFeatureProjectId(featureId)) !== projectId) {
       return NextResponse.json({ error: 'Feature not found in this project' }, { status: 404 });
@@ -93,9 +90,43 @@ export async function PATCH(request: Request, { params }: Params) {
     const result = updateFeatureSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
+    const changedFields = Object.keys(result.data).filter((k) => result.data[k as keyof typeof result.data] !== undefined);
+
+    if (!canManageProject(access)) {
+      // Assignees move their own work along the board, but nothing else
+      const [assignment] = await db
+        .select({ id: feature_members.id })
+        .from(feature_members)
+        .where(and(eq(feature_members.feature_id, featureId), eq(feature_members.member_id, user.id)))
+        .limit(1);
+      const statusOnly = changedFields.length === 1 && changedFields[0] === 'status';
+      if (!assignment || !statusOnly) {
+        return NextResponse.json(
+          { error: assignment ? 'Assignees can only change the status' : 'Only assignees and managers can update this feature' },
+          { status: 403 },
+        );
+      }
+      // Releasing is a management decision
+      if (result.data.status === 'Released') {
+        return NextResponse.json({ error: 'Only managers can mark a feature as Released' }, { status: 403 });
+      }
+    }
+
+    if (result.data.sprint_id && !(await sprintInProject(result.data.sprint_id, projectId))) {
+      return NextResponse.json({ error: 'Sprint not found in this project' }, { status: 404 });
+    }
+
+    const updates: Partial<typeof features.$inferInsert> = { ...result.data };
+    // completed_at records when the feature shipped; it drives burndown and velocity
+    if (result.data.status !== undefined) {
+      const [current] = await db.select({ status: features.status }).from(features).where(eq(features.id, featureId)).limit(1);
+      if (result.data.status === 'Released' && current?.status !== 'Released') updates.completed_at = new Date();
+      if (result.data.status !== 'Released') updates.completed_at = null;
+    }
+
     const [feature] = await db
       .update(features)
-      .set(result.data)
+      .set(updates)
       .where(eq(features.id, featureId))
       .returning();
 
@@ -105,7 +136,9 @@ export async function PATCH(request: Request, { params }: Params) {
       action: 'Updated',
       entityType: 'Feature',
       entityId: featureId,
-      description: `Updated feature: ${feature.title}`
+      description: changedFields.length === 1 && changedFields[0] === 'status'
+        ? `Moved feature "${feature.title}" to ${feature.status}`
+        : `Updated feature: ${feature.title}`
     });
 
     return NextResponse.json(feature);

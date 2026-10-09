@@ -20,7 +20,7 @@ export async function PATCH(request: Request) {
 
     const result = updateProfileSchema.safeParse(await request.json());
     if (!result.success) {
-      return NextResponse.json({ error: result.error.issues }, { status: 400 });
+      return NextResponse.json({ error: result.error.issues[0]?.message || 'Invalid payload', details: result.error.issues }, { status: 400 });
     }
 
     const [updatedProfile] = await db

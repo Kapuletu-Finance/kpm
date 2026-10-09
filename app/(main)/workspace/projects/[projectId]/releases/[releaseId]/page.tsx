@@ -3,7 +3,7 @@
 import { use, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useRelease, useUpdateRelease, useAssignFeaturesToRelease } from '@/hooks/useReleases';
+import { useRelease, useUpdateRelease, useAssignFeaturesToRelease, useDeleteRelease } from '@/hooks/useReleases';
 import { useAuth } from '@/store/AuthContext';
 import { useProjectTeam } from '@/hooks/useProjectTeam';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Rocket, Save, Plus, X, Loader2, CheckCircle2, Circle } from 'lucide-react';
+import { ArrowLeft, Rocket, Save, Plus, X, Loader2, CheckCircle2, Circle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 
@@ -23,6 +23,7 @@ export default function ReleaseDetailPage({ params }: { params: Promise<{ projec
   const { data: release, isLoading } = useRelease(projectId, releaseId);
   const updateMutation = useUpdateRelease(projectId);
   const assignMutation = useAssignFeaturesToRelease(projectId);
+  const deleteMutation = useDeleteRelease(projectId);
 
   const role = teamMembers?.find((m: any) => m.member_id === memberProfile?.id)?.project_role;
   const isGlobalAdmin = memberProfile?.organization_role === 'Organization Admin';
@@ -93,6 +94,17 @@ export default function ReleaseDetailPage({ params }: { params: Promise<{ projec
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm('Delete this release? Its features stay in the project but leave the release.')) return;
+    try {
+      await deleteMutation.mutateAsync(releaseId);
+      toast.success('Release deleted');
+      router.push(`/workspace/projects/${projectId}/releases`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete release');
+    }
+  };
+
   if (isLoading) return <div className="p-6 animate-pulse">Loading Release...</div>;
   if (!release) return <div className="p-6">Release not found</div>;
 
@@ -127,6 +139,17 @@ export default function ReleaseDetailPage({ params }: { params: Promise<{ projec
             <Button onClick={handleUpdate} disabled={updateMutation.isPending}>
               {updateMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
               Save Changes
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              title="Delete release"
+              aria-label="Delete release"
+            >
+              <Trash2 className="w-4 h-4" />
             </Button>
           </div>
         )}

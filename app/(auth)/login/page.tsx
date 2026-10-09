@@ -23,6 +23,35 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+
+  // Messages passed in the URL by the email-verification link and forced sign-outs
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verified') === '1') toast.success('Email confirmed. You can sign in now.');
+    const error = params.get('error');
+    if (error) toast.error(error);
+  }, []);
+  const [isResending, setIsResending] = useState(false);
+
+  const handleResendVerification = async () => {
+    setIsResending(true);
+    try {
+      const res = await fetch('/api/v1/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: unverifiedEmail }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Could not resend the link');
+      toast.success('A new verification link has been sent. Check your inbox.');
+      setShowVerificationModal(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Could not resend the link');
+    } finally {
+      setIsResending(false);
+    }
+  };
   const loginMutation = useLoginMutation();
 
   const {
@@ -44,6 +73,7 @@ export default function LoginPage() {
       // but useLoginMutation just throws new Error(error.error).
       // We can check the error message string.
       if (error.message.includes('Email not confirmed')) {
+        setUnverifiedEmail(data.email);
         setShowVerificationModal(true);
       } else {
         toast.error(error.message || 'Failed to login');
@@ -119,7 +149,11 @@ export default function LoginPage() {
               Your email address has not been verified yet. Please check your inbox and click the secure link to activate your account before logging in.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end pt-4">
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={handleResendVerification} disabled={isResending || !unverifiedEmail}>
+              {isResending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Resend link
+            </Button>
             <Button onClick={() => setShowVerificationModal(false)}>
               Close
             </Button>

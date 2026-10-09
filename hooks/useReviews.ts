@@ -38,7 +38,10 @@ export function useSubmitReview(projectId: string, featureId: string, deliverabl
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to submit review');
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to submit review');
+      }
       return res.json();
     },
     onSuccess: () => {

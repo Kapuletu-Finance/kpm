@@ -1,42 +1,26 @@
+import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { v2 as cloudinary } from 'cloudinary';
-import { getSessionUser } from '@/lib/auth/session';
+import { requireApiUser } from '@/lib/auth/session';
+import { uploadToCloudinary, validateUpload } from '@/lib/cloudinary';
 
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
+// Uploads a deliverable attachment and returns its URL.
 export async function POST(request: Request) {
   try {
-    const user = await getSessionUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { response } = await requireApiUser();
+    if (response) return response;
 
     const formData = await request.formData();
-    const file = formData.get('file') as File;
-    
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
+    const file = formData.get('file') as File | null;
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const invalid = validateUpload(file);
+    if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
 
-    const result = await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        { folder: 'kpm_deliverables', resource_type: 'auto' },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
-      );
-      uploadStream.end(buffer);
-    });
+    const buffer = Buffer.from(await file!.arrayBuffer());
+    const url = await uploadToCloudinary(buffer, 'kpm_deliverables', randomUUID());
 
-    return NextResponse.json({ url: (result as any).secure_url });
-  } catch (error: any) {
+    return NextResponse.json({ url });
+  } catch (error) {
     console.error('Upload error:', error);
-    return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 }

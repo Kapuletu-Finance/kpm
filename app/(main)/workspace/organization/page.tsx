@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/store/AuthContext';
-import { useMembers, useRemoveMember, useInviteMember, useResendInviteMutation } from '@/hooks/useOrganization';
+import { useMembers, useRemoveMember, useInviteMember, useResendInviteMutation, useUpdateMember } from '@/hooks/useOrganization';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
-import { Building2, Plus, Trash2, MailCheck, Loader2, Send, Users, UserCheck, Clock, UserCog } from 'lucide-react';
+import { Plus, Trash2, MailCheck, Loader2, Send, Users, UserCheck, Clock, UserCog, UserX } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,11 +19,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
+const ORG_ROLES = ['Organization Admin', 'Project Manager', 'Member'] as const;
+
 const inviteSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Please enter a valid email address'),
-  role: z.enum(['Project Manager', 'Member']),
+  role: z.enum(['Organization Admin', 'Project Manager', 'Member']),
 });
 
 type InviteFormValues = z.infer<typeof inviteSchema>;
@@ -33,9 +36,10 @@ export default function OrganizationPage() {
   const removeMutation = useRemoveMember();
   const inviteMutation = useInviteMember();
   const resendMutation = useResendInviteMutation();
+  const updateMemberMutation = useUpdateMember();
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<any | null>(null);
 
   const {
     register,
@@ -71,10 +75,23 @@ export default function OrganizationPage() {
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
+  const handleUpdateMember = async (
+    memberId: string,
+    data: { organization_role?: string; status?: 'Active' | 'Inactive' },
+    successMessage: string,
+  ) => {
     try {
-      await removeMutation.mutateAsync(memberId);
-      toast.success('Member removed completely from the organization');
+      await updateMemberMutation.mutateAsync({ memberId, data });
+      toast.success(successMessage);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update member');
+    }
+  };
+
+  const handleRemoveMember = async (member: any) => {
+    try {
+      await removeMutation.mutateAsync(member.id);
+      toast.success(member.status === 'Invited' ? 'Invitation revoked' : 'Member deactivated');
       setMemberToRemove(null);
     } catch (error: any) {
       toast.error(error.message || 'Failed to remove member');
@@ -155,6 +172,7 @@ export default function OrganizationPage() {
                   >
                     <option value="Member">Member</option>
                     <option value="Project Manager">Project Manager</option>
+                    <option value="Organization Admin">Organization Admin</option>
                   </select>
                   {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
                 </div>
@@ -249,14 +267,36 @@ export default function OrganizationPage() {
               {members?.map((member: any) => (
                 <TableRow key={member.id}>
                   <TableCell className="font-medium">
-                    {member.first_name} {member.last_name}
+                    {isOrgAdmin && member.status !== 'Invited' ? (
+                      <Link href={`/workspace/organization/members/${member.id}`} className="hover:text-primary hover:underline">
+                        {member.first_name} {member.last_name}
+                      </Link>
+                    ) : (
+                      <>{member.first_name} {member.last_name}</>
+                    )}
                   </TableCell>
                   <TableCell>{member.email}</TableCell>
                   <TableCell>
-                    <Badge variant={member.organization_role === 'Organization Admin' ? 'default' : 'secondary'}
-                           className={member.organization_role === 'Organization Admin' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}>
-                      {member.organization_role}
-                    </Badge>
+                    {isOrgAdmin && member.id !== memberProfile?.id && member.status !== 'Inactive' ? (
+                      <select
+                        aria-label={`Organization role for ${member.first_name} ${member.last_name}`}
+                        value={member.organization_role}
+                        disabled={updateMemberMutation.isPending}
+                        onChange={(e) =>
+                          handleUpdateMember(member.id, { organization_role: e.target.value }, `Role changed to ${e.target.value}`)
+                        }
+                        className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                      >
+                        {ORG_ROLES.map((role) => (
+                          <option key={role} value={role}>{role}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Badge variant={member.organization_role === 'Organization Admin' ? 'default' : 'secondary'}
+                             className={member.organization_role === 'Organization Admin' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}>
+                        {member.organization_role}
+                      </Badge>
+                    )}
                   </TableCell>
                   {isOrgAdmin && (
                     <>
@@ -264,7 +304,9 @@ export default function OrganizationPage() {
                         <Badge variant="outline" className={
                           member.status === 'Active' 
                             ? 'border-success text-success bg-success/10' 
-                            : 'border-accent text-accent bg-accent/10'
+                            : member.status === 'Inactive'
+                              ? 'border-border text-muted-foreground bg-muted'
+                              : 'border-accent text-accent bg-accent/10'
                         }>
                           {member.status}
                         </Badge>
@@ -291,23 +333,36 @@ export default function OrganizationPage() {
                           <span className="hidden sm:inline">Resend Invite</span>
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => setMemberToRemove(member.id)}
-                        disabled={member.id === memberProfile?.id || removeMutation.isPending}
-                        title="Remove Member"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {member.status === 'Inactive' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-primary hover:text-primary hover:bg-primary/10 gap-1.5"
+                          onClick={() => handleUpdateMember(member.id, { status: 'Active' }, 'Member reactivated')}
+                          disabled={updateMemberMutation.isPending}
+                        >
+                          <UserCheck className="h-4 w-4" />
+                          <span className="hidden sm:inline">Reactivate</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setMemberToRemove(member)}
+                          disabled={member.id === memberProfile?.id || removeMutation.isPending}
+                          title={member.status === 'Invited' ? 'Revoke invitation' : 'Deactivate member'}
+                        >
+                          {member.status === 'Invited' ? <Trash2 className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                        </Button>
+                      )}
                     </TableCell>
                   )}
                 </TableRow>
               ))}
               {members?.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={isOrgAdmin ? 7 : 6} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={isOrgAdmin ? 7 : 3} className="h-24 text-center text-muted-foreground">
                     No members found.
                   </TableCell>
                 </TableRow>
@@ -320,9 +375,13 @@ export default function OrganizationPage() {
       <AlertDialog open={!!memberToRemove} onOpenChange={(open) => !open && setMemberToRemove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {memberToRemove?.status === 'Invited' ? 'Revoke this invitation?' : 'Deactivate this member?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently remove the member from your organization and completely revoke their authentication access.
+              {memberToRemove?.status === 'Invited'
+                ? 'The invitation link will stop working and the pending account will be deleted.'
+                : 'They will lose access to KPM and be removed from every project team. Their standups, comments and deliverables are kept, and you can reactivate them at any time.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -332,7 +391,9 @@ export default function OrganizationPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={removeMutation.isPending}
             >
-              {removeMutation.isPending ? 'Removing...' : 'Remove Member'}
+              {removeMutation.isPending
+                ? 'Working...'
+                : memberToRemove?.status === 'Invited' ? 'Revoke Invitation' : 'Deactivate Member'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

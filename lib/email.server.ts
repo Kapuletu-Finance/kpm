@@ -6,6 +6,10 @@ const fromEmail = process.env.POSTMARK_FROM_EMAIL;
 
 const client = serverToken ? new postmark.ServerClient(serverToken) : null;
 
+// Names, titles and responsibilities are user-supplied: escape them before putting them in HTML.
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
 export async function sendProjectAssignmentEmail({
   toEmail,
   pmName,
@@ -27,6 +31,7 @@ export async function sendProjectAssignmentEmail({
   // Assuming standard domain mapping. In production, NEXT_PUBLIC_SITE_URL or similar is better.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const projectUrl = `${appUrl}/workspace/projects/${projectId}`;
+  const h = { pmName: escapeHtml(pmName), projectName: escapeHtml(projectName), adminName: escapeHtml(adminName) };
 
   try {
     await client.sendEmail({
@@ -36,8 +41,8 @@ export async function sendProjectAssignmentEmail({
       HtmlBody: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
           <h2 style="color: #097255;">Project Assignment Notification</h2>
-          <p>Hi ${pmName},</p>
-          <p>You have been designated as the Project Manager for <strong>${projectName}</strong> by ${adminName}.</p>
+          <p>Hi ${h.pmName},</p>
+          <p>You have been designated as the Project Manager for <strong>${h.projectName}</strong> by ${h.adminName}.</p>
           <p>You now have full operational control over this project in your workspace.</p>
           <div style="margin: 30px 0;">
             <a href="${projectUrl}" style="background-color: #097255; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
@@ -45,7 +50,7 @@ export async function sendProjectAssignmentEmail({
             </a>
           </div>
           <p style="font-size: 0.9em; color: #666;">
-            If you have any questions about this assignment, please reach out to ${adminName} or your organization admin.
+            If you have any questions about this assignment, please reach out to ${h.adminName} or your organization admin.
           </p>
         </div>
       `,
@@ -82,7 +87,14 @@ export async function sendFeatureAssignmentEmail({
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const featureUrl = `${appUrl}/workspace/projects/${projectId}/features`;
+  const featureUrl = `${appUrl}/workspace/projects/${projectId}/features/${featureId}`;
+  const h = {
+    assigneeName: escapeHtml(assigneeName),
+    projectName: escapeHtml(projectName),
+    featureName: escapeHtml(featureName),
+    assignerName: escapeHtml(assignerName),
+    responsibility: responsibility ? escapeHtml(responsibility) : '',
+  };
 
   try {
     await client.sendEmail({
@@ -92,21 +104,21 @@ export async function sendFeatureAssignmentEmail({
       HtmlBody: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
           <h2 style="color: #097255;">Feature Assignment Notification</h2>
-          <p>Hi ${assigneeName},</p>
-          <p>You have been assigned to the feature <strong>${featureName}</strong> in the project <strong>${projectName}</strong> by ${assignerName}.</p>
-          ${responsibility ? `<p>Your listed responsibility: <em>${responsibility}</em></p>` : ''}
+          <p>Hi ${h.assigneeName},</p>
+          <p>You have been assigned to the feature <strong>${h.featureName}</strong> in the project <strong>${h.projectName}</strong> by ${h.assignerName}.</p>
+          ${h.responsibility ? `<p>Your listed responsibility: <em>${h.responsibility}</em></p>` : ''}
           <p>Please review the feature details and begin work when ready.</p>
           <div style="margin: 30px 0;">
             <a href="${featureUrl}" style="background-color: #097255; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-              View Feature Board
+              View Feature
             </a>
           </div>
           <p style="font-size: 0.9em; color: #666;">
-            If you have any questions, please reach out to ${assignerName}.
+            If you have any questions, please reach out to ${h.assignerName}.
           </p>
         </div>
       `,
-      TextBody: `Hi ${assigneeName},\n\nYou have been assigned to the feature ${featureName} in the project ${projectName} by ${assignerName}.\n${responsibility ? `Your listed responsibility: ${responsibility}\n` : ''}\nView Feature Board: ${featureUrl}`
+      TextBody: `Hi ${assigneeName},\n\nYou have been assigned to the feature ${featureName} in the project ${projectName} by ${assignerName}.\n${responsibility ? `Your listed responsibility: ${responsibility}\n` : ''}\nView Feature: ${featureUrl}`
     });
     console.log(`Feature assignment email sent to ${toEmail} for feature ${featureId}`);
   } catch (error) {
@@ -117,9 +129,6 @@ export async function sendFeatureAssignmentEmail({
 // ---------------------------------------------------------------------------
 // Account emails (formerly sent by Supabase Auth), using the branded templates.
 // ---------------------------------------------------------------------------
-
-const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 function renderTemplate(template: string, url: string, data: Record<string, string> = {}) {
   return template

@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { comments, members } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { getProjectAccess, memberSummary } from '@/lib/db/queries';
+import { entityInProject, getProjectAccess, memberSummary } from '@/lib/db/queries';
+import { notifyCommentAudience } from '@/lib/comment-notifications.server';
 import { handleRouteError } from '@/lib/api/http';
 
 const commentSchema = z.object({
@@ -40,6 +41,9 @@ export async function GET(request: Request, { params }: Params) {
     if (!entityType || !entityId) {
       return NextResponse.json({ error: 'Missing entityType or entityId' }, { status: 400 });
     }
+    if (!(await entityInProject(entityType, entityId, projectId))) {
+      return NextResponse.json({ error: 'Not found in this project' }, { status: 404 });
+    }
 
     // Oldest first for threads
     const data = await selectComments(
@@ -58,12 +62,28 @@ export async function POST(request: Request, { params }: Params) {
     const { user, response } = await requireApiUser();
     if (response) return response;
 
-    if (!(await getProjectAccess(user.id, projectId)).hasAccess) {
+    const access = await getProjectAccess(user.id, projectId);
+    if (!access.hasAccess) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const result = commentSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
+
+    const { entity_type, entity_id, parent_comment_id } = result.data;
+    if (!(await entityInProject(entity_type, entity_id, projectId))) {
+      return NextResponse.json({ error: 'Not found in this project' }, { status: 404 });
+    }
+
+    // A reply must stay in the same thread
+    if (parent_comment_id) {
+      const [parent] = await db
+        .select({ id: comments.id })
+        .from(comments)
+        .where(and(eq(comments.id, parent_comment_id), eq(comments.entity_type, entity_type), eq(comments.entity_id, entity_id)))
+        .limit(1);
+      if (!parent) return NextResponse.json({ error: 'Parent comment not found' }, { status: 404 });
+    }
 
     const [created] = await db
       .insert(comments)
@@ -75,6 +95,16 @@ export async function POST(request: Request, { params }: Params) {
         parent_comment_id: result.data.parent_comment_id || null
       })
       .returning({ id: comments.id });
+
+    await notifyCommentAudience({
+      projectId,
+      authorId: user.id,
+      authorName: `${access.member.first_name} ${access.member.last_name}`.trim(),
+      entityType: entity_type,
+      entityId: entity_id,
+      comment: result.data.comment,
+      parentCommentId: parent_comment_id,
+    });
 
     const [comment] = await selectComments(eq(comments.id, created.id));
     return NextResponse.json(comment);

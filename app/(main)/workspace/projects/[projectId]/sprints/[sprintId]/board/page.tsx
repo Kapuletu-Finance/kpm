@@ -84,8 +84,11 @@ export default function SprintBoardPage({ params }: { params: Promise<{ projectI
     const sourceItems = [...boardData[sourceCol]];
     const destItems = sourceCol === destCol ? sourceItems : [...boardData[destCol]];
 
-    const [movedItem] = sourceItems.splice(source.index, 1);
-    
+    const previousBoard = boardData;
+    const [removedItem] = sourceItems.splice(source.index, 1);
+    // Copy rather than mutate, so a failed update can restore the previous board
+    const movedItem = { ...removedItem };
+
     if (sourceCol === destCol) {
       // Reordering within the same column (we don't persist order index yet, just UI update)
       sourceItems.splice(destination.index, 0, movedItem);
@@ -110,9 +113,10 @@ export default function SprintBoardPage({ params }: { params: Promise<{ projectI
           data: { status: destCol } 
         });
         toast.success(`Moved to ${destCol}`);
-      } catch (error) {
-        toast.error('Failed to update status');
-        // Revert could be handled here by refetching, but for now we let React Query invalidate and catch up.
+      } catch (error: any) {
+        // Put the card back where it was
+        setBoardData(previousBoard);
+        toast.error(error?.message || 'Failed to update status');
       }
     }
   };
@@ -147,11 +151,16 @@ export default function SprintBoardPage({ params }: { params: Promise<{ projectI
           </div>
         </div>
         
-        {(sprint.status === 'Planning' || sprint.status === 'Active') && (
-          <Button variant="outline" onClick={() => router.push(`/workspace/projects/${projectId}/sprints/${sprintId}/plan`)}>
-            Sprint Scope & Backlog
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => router.push(`/workspace/projects/${projectId}/sprints/${sprintId}/insights`)}>
+            Insights & Retro
           </Button>
-        )}
+          {(sprint.status === 'Planning' || sprint.status === 'Active') && (
+            <Button variant="outline" onClick={() => router.push(`/workspace/projects/${projectId}/sprints/${sprintId}/plan`)}>
+              Sprint Scope & Backlog
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Kanban Board */}

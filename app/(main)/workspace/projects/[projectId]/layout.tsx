@@ -5,8 +5,7 @@ import { usePathname } from 'next/navigation';
 import { use } from 'react';
 import Link from 'next/link';
 import { useProject, useUpdateProject } from '@/hooks/useProjects';
-import { useAuth } from '@/store/AuthContext';
-import { Loader2, ArrowLeft, Map, Users, Route, Settings2, Timer, MessageSquare, Video, FolderOpen, Rocket, Activity, Pencil, PauseCircle } from 'lucide-react';
+import { Loader2, ArrowLeft, Map, Users, Route, Settings2, Timer, MessageSquare, Video, FolderOpen, Rocket, Activity, Pencil, PauseCircle, Flag, BarChart3 } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +22,6 @@ export default function ProjectLayout({
   const pathname = usePathname();
   const { projectId } = use(params);
   const { data: project, isLoading, error } = useProject(projectId);
-  const { memberProfile } = useAuth();
   const updateMutation = useUpdateProject();
 
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -48,9 +46,8 @@ export default function ProjectLayout({
     );
   }
 
-  const isManagerOrAdmin =
-    memberProfile?.organization_role === 'Organization Admin' ||
-    project.project_manager_id === memberProfile?.id;
+  // Computed by the API with the same rule it enforces (Org Admin or any of the project's PMs)
+  const isManagerOrAdmin = Boolean(project.can_manage);
 
   // Lifecycle actions available based on current status
   const canPublish = isManagerOrAdmin && (project.status === 'Draft' || project.status === 'Planning');
@@ -81,6 +78,7 @@ export default function ProjectLayout({
     { name: 'Overview', href: `/workspace/projects/${project.id}`, icon: Map },
     { name: 'Sprints', href: `/workspace/projects/${project.id}/sprints`, icon: Timer },
     { name: 'Roadmap', href: `/workspace/projects/${project.id}/roadmap`, icon: Route },
+    { name: 'Milestones', href: `/workspace/projects/${project.id}/milestones`, icon: Flag },
     { name: 'Standups', href: `/workspace/projects/${project.id}/standups`, icon: MessageSquare },
     { name: 'Meetings', href: `/workspace/projects/${project.id}/meetings`, icon: Video },
     { name: 'Documents', href: `/workspace/projects/${project.id}/documents`, icon: FolderOpen },
@@ -90,6 +88,7 @@ export default function ProjectLayout({
   ];
 
   if (isManagerOrAdmin) {
+    tabs.push({ name: 'Reports', href: `/workspace/projects/${project.id}/reports`, icon: BarChart3 });
     tabs.push({ name: 'Settings', href: `/workspace/projects/${project.id}/settings`, icon: Settings2 });
   }
 

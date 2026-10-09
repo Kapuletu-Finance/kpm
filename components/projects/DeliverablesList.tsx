@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useDeliverables, useSubmitDeliverable, useDeleteDeliverable } from '@/hooks/useDeliverables';
+import { useDeliverables, useSubmitDeliverable, useDeleteDeliverable, useResubmitDeliverable } from '@/hooks/useDeliverables';
 import { useReviews, useSubmitReview } from '@/hooks/useReviews';
 import { useAuth } from '@/store/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -12,13 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { Plus, GitPullRequest, PenTool, FileText, Image as ImageIcon, Video, Link2, Trash2, Code2, UploadCloud, Loader2, MonitorPlay, MessageSquareReply, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { Plus, GitPullRequest, PenTool, FileText, Image as ImageIcon, Video, Link2, Trash2, Code2, UploadCloud, Loader2, MonitorPlay, MessageSquareReply, CheckCircle2, XCircle, HelpCircle, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 
 const DELIVERABLE_TYPES = ['GitHub PR', 'Figma Link', 'API Doc', 'Document', 'Video', 'Screenshot', 'Demo', 'Commit', 'Deployment URL'] as const;
 const MEDIA_TYPES = ['Video', 'Screenshot', 'Document', 'Demo'];
 
-export function DeliverablesList({ projectId, featureId, canManage }: { projectId: string, featureId: string, canManage: boolean }) {
+export function DeliverablesList({ projectId, featureId, canManage, canReview = canManage }: { projectId: string, featureId: string, canManage: boolean, canReview?: boolean }) {
   const { memberProfile } = useAuth();
   const { data: deliverables, isLoading } = useDeliverables(projectId, featureId);
   const submitMutation = useSubmitDeliverable(projectId, featureId);
@@ -181,6 +181,7 @@ export function DeliverablesList({ projectId, featureId, canManage }: { projectI
               projectId={projectId}
               featureId={featureId}
               canManage={canManage}
+              canReview={canReview}
               memberProfile={memberProfile}
               onDelete={handleDelete}
             />
@@ -191,10 +192,31 @@ export function DeliverablesList({ projectId, featureId, canManage }: { projectI
   );
 }
 
-function DeliverableCard({ deliverable, projectId, featureId, canManage, memberProfile, onDelete }: any) {
+function DeliverableCard({ deliverable, projectId, featureId, canManage, canReview, memberProfile, onDelete }: any) {
   const { data: reviews } = useReviews(projectId, featureId, deliverable.id);
   const submitReview = useSubmitReview(projectId, featureId, deliverable.id);
-  
+  const resubmit = useResubmitDeliverable(projectId, featureId);
+
+  const isOwn = memberProfile?.id === deliverable.member_id;
+  // Reviewers never review their own work; submitters revise after feedback
+  const showReview = canReview && !isOwn;
+  const canResubmit = isOwn && (deliverable.status === 'Changes Requested' || deliverable.status === 'Rejected');
+
+  const [resubmitOpen, setResubmitOpen] = useState(false);
+  const [newLink, setNewLink] = useState(deliverable.link || '');
+  const [newDescription, setNewDescription] = useState(deliverable.description || '');
+
+  const handleResubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await resubmit.mutateAsync({ deliverableId: deliverable.id, data: { link: newLink, description: newDescription } });
+      toast.success('Deliverable resubmitted for review');
+      setResubmitOpen(false);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to resubmit');
+    }
+  };
+
   const [reviewOpen, setReviewOpen] = useState(false);
   const [decision, setDecision] = useState<'Approved' | 'Changes Requested' | 'Rejected'>('Approved');
   const [comments, setComments] = useState('');
@@ -228,8 +250,8 @@ function DeliverableCard({ deliverable, projectId, featureId, canManage, memberP
       toast.success('Review submitted successfully');
       setReviewOpen(false);
       setComments('');
-    } catch (error) {
-      toast.error('Failed to submit review');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to submit review');
     }
   };
 
@@ -270,7 +292,34 @@ function DeliverableCard({ deliverable, projectId, featureId, canManage, memberP
               </Button>
             )}
 
-            {canManage && (
+            {canResubmit && (
+              <Dialog open={resubmitOpen} onOpenChange={setResubmitOpen}>
+                <DialogTrigger render={<Button size="sm" variant="outline"><RotateCcw className="w-4 h-4 mr-2" /> Resubmit</Button>} />
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Revise and resubmit</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleResubmit} className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <label htmlFor={`resubmit-link-${deliverable.id}`} className="text-sm font-medium">Link</label>
+                      <Input id={`resubmit-link-${deliverable.id}`} type="url" required value={newLink} onChange={e => setNewLink(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor={`resubmit-desc-${deliverable.id}`} className="text-sm font-medium">What changed?</label>
+                      <Textarea id={`resubmit-desc-${deliverable.id}`} value={newDescription} onChange={e => setNewDescription(e.target.value)} />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="ghost" onClick={() => setResubmitOpen(false)}>Cancel</Button>
+                      <Button type="submit" disabled={resubmit.isPending}>
+                        {resubmit.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending...</> : 'Resubmit'}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
+
+            {showReview && (
               <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
                 <DialogTrigger render={<Button size="sm" variant="outline" className="ml-auto"><MessageSquareReply className="w-4 h-4 mr-2" /> Review</Button>} />
                 <DialogContent>

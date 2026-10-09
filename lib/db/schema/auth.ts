@@ -17,6 +17,8 @@ export const users = pgTable('users', {
   // bcrypt, so hashes copied from Supabase's auth.users.encrypted_password still verify.
   passwordHash: text('password_hash'),
   lastSignInAt: timestamp('last_sign_in_at', { mode: 'date', withTimezone: true }),
+  // Sessions issued before this moment are rejected (set on password change/reset).
+  sessionsValidAfter: timestamp('sessions_valid_after', { mode: 'date', withTimezone: true }),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
     .notNull()

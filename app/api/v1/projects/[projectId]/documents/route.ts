@@ -6,7 +6,8 @@ import { members, project_documents } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
 import { getProjectAccess, memberSummary } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadToCloudinary, validateUpload } from '@/lib/cloudinary';
+import { logActivity } from '@/lib/activity.server';
 
 const documentSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -51,8 +52,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     const title = formData.get('title') as string;
     const category = formData.get('category') as string;
 
-    if (!file) {
-      return NextResponse.json({ error: 'File is required' }, { status: 400 });
+    const invalid = validateUpload(file);
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
     const result = documentSchema.safeParse({ title, category });
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     }
 
     // Upload the file to Cloudinary; only its URL is stored in Postgres
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const buffer = Buffer.from(await file!.arrayBuffer());
     const safeTitle = result.data.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const filename = `${safeTitle}_${Date.now()}`;
     const folder = `kpm/projects/${projectId}/documents`;
@@ -77,6 +79,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
         uploaded_by: user.id
       })
       .returning();
+
+    await logActivity({
+      projectId,
+      memberId: user.id,
+      action: 'Uploaded',
+      entityType: 'Document',
+      entityId: doc.id,
+      description: `Uploaded document: ${doc.title}`,
+    });
 
     return NextResponse.json(doc, { status: 201 });
   } catch (error) {

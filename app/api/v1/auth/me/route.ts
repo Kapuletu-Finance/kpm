@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { members, organizations } from '@/lib/db/schema';
-import { getSessionUser } from '@/lib/auth/session';
+import { getVerifiedSession } from '@/lib/auth/session';
 import { handleRouteError } from '@/lib/api/http';
 
 // The signed-in user and their member profile (with organization), for AuthContext.
 export async function GET() {
   try {
-    const user = await getSessionUser();
-    if (!user) return NextResponse.json({ user: null, memberProfile: null }, { status: 401 });
+    // A revoked or deactivated session reads as signed out, so the client sends the user to log in
+    const { user, reason } = await getVerifiedSession();
+    if (!user) return NextResponse.json({ user: null, memberProfile: null, reason }, { status: 401 });
 
     const [row] = await db
       .select({ member: members, organization: organizations })

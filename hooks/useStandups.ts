@@ -83,3 +83,21 @@ export function useUpdateStandup(projectId: string) {
     },
   });
 }
+
+export function useDeleteStandup(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (standupId: string) => {
+      const res = await fetch(`/api/v1/projects/${projectId}/standups/${standupId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to delete standup');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'standups'] });
+    },
+  });
+}

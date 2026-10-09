@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { meeting_participants, members } from '@/lib/db/schema';
+import { meeting_participants, meetings, members } from '@/lib/db/schema';
+import { createNotification } from '@/lib/notifications.server';
 import { requireApiUser } from '@/lib/auth/session';
-import { getProjectAccess, meetingInProject } from '@/lib/db/queries';
+import { getProjectAccess, meetingInProject, memberInProjectOrg } from '@/lib/db/queries';
 import { handleRouteError, isUniqueViolation } from '@/lib/api/http';
 
 const participantSchema = z.object({
@@ -68,11 +69,34 @@ export async function POST(request: Request, { params }: Params) {
     const result = participantSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
 
+    // Participants come from the project's organization only
+    if (!(await memberInProjectOrg(result.data.member_id, projectId))) {
+      return NextResponse.json({ error: 'Member not found in your organization' }, { status: 404 });
+    }
+
     try {
       await db.insert(meeting_participants).values({ meeting_id: meetingId, member_id: result.data.member_id });
     } catch (error) {
       if (isUniqueViolation(error)) return NextResponse.json({ error: 'Already a participant' }, { status: 400 });
       throw error;
+    }
+
+    if (result.data.member_id !== user.id) {
+      const [meeting] = await db
+        .select({ title: meetings.title, start_time: meetings.start_time })
+        .from(meetings)
+        .where(eq(meetings.id, meetingId))
+        .limit(1);
+      await createNotification({
+        member_id: result.data.member_id,
+        title: 'You were invited to a meeting',
+        message: meeting?.start_time
+          ? `${meeting.title} on ${meeting.start_time.toUTCString()}`
+          : meeting?.title,
+        type: 'Assignment',
+        entity_type: 'Meeting',
+        entity_id: meetingId,
+      });
     }
 
     const [data] = await db

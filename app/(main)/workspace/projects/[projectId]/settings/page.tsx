@@ -2,7 +2,6 @@
 
 import { use } from 'react';
 import { useProject } from '@/hooks/useProjects';
-import { useAuth } from '@/store/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Settings2, FileText, Link2, AlertTriangle } from 'lucide-react';
 import { GeneralSettingsForm } from '@/components/projects/settings/GeneralSettingsForm';
@@ -17,7 +16,6 @@ export default function ProjectSettingsPage({
 }) {
   const { projectId } = use(params);
   const { data: project, isLoading, error } = useProject(projectId);
-  const { memberProfile } = useAuth();
 
   if (isLoading) {
     return (
@@ -35,10 +33,8 @@ export default function ProjectSettingsPage({
     );
   }
 
-  // Only Org Admins or the assigned Project Manager can see settings
-  const canManageSettings = 
-    memberProfile?.organization_role === 'Organization Admin' || 
-    project.project_manager_id === memberProfile?.id;
+  // Only Org Admins or the project's Project Managers can see settings (computed by the API)
+  const canManageSettings = Boolean(project.can_manage);
 
   if (!canManageSettings) {
     return (

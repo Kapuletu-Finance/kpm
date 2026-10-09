@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { meeting_action_items } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { getProjectAccess, meetingInProject, selectActionItems } from '@/lib/db/queries';
+import { getProjectAccess, meetingInProject, memberInProjectOrg, selectActionItems } from '@/lib/db/queries';
+import { createNotification } from '@/lib/notifications.server';
 import { handleRouteError } from '@/lib/api/http';
 
 const actionItemSchema = z.object({
@@ -56,6 +57,11 @@ export async function POST(request: Request, { params }: Params) {
     const result = actionItemSchema.safeParse(await request.json());
     if (!result.success) return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
 
+    const assignee = result.data.assigned_to;
+    if (assignee && !(await memberInProjectOrg(assignee, projectId))) {
+      return NextResponse.json({ error: 'Assignee not found in your organization' }, { status: 404 });
+    }
+
     const [created] = await db
       .insert(meeting_action_items)
       .values({
@@ -66,6 +72,17 @@ export async function POST(request: Request, { params }: Params) {
         due_date: result.data.due_date || null
       })
       .returning({ id: meeting_action_items.id });
+
+    if (assignee && assignee !== user.id) {
+      await createNotification({
+        member_id: assignee,
+        title: 'New action item assigned to you',
+        message: result.data.description,
+        type: 'Assignment',
+        entity_type: 'Meeting',
+        entity_id: meetingId,
+      });
+    }
 
     const [data] = await selectActionItems(eq(meeting_action_items.id, created.id));
     return NextResponse.json(data);

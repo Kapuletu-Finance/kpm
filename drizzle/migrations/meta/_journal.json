@@ -15,6 +15,13 @@
       "when": 1791503380962,
       "tag": "0001_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791537535081,
+      "tag": "0002_section3_oversight",
+      "breakpoints": true
     }
   ]
 }

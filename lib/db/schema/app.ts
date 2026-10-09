@@ -298,6 +298,8 @@ export const features = pgTable("features", {
 	created_at: timestamp({ withTimezone: true, mode: 'date' }).defaultNow(),
 	updated_at: timestamp({ withTimezone: true, mode: 'date' }).defaultNow().$onUpdate(() => new Date()),
 	release_id: uuid(),
+	// When the feature last reached Released (null while unfinished). Drives burndown and velocity.
+	completed_at: timestamp({ withTimezone: true, mode: 'date' }),
 }, (table) => [
 	foreignKey({
 			columns: [table.release_id],
@@ -522,6 +524,9 @@ export const releases = pgTable("releases", {
 
 export const activity_logs = pgTable("activity_logs", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
+	// Every event belongs to an organization; project-less events (role changes,
+	// invites, settings) have project_id null.
+	organization_id: uuid(),
 	project_id: uuid(),
 	member_id: uuid(),
 	action: text().notNull(),
@@ -531,10 +536,16 @@ export const activity_logs = pgTable("activity_logs", {
 	created_at: timestamp({ withTimezone: true, mode: 'date' }).defaultNow(),
 }, (table) => [
 	foreignKey({
+			columns: [table.organization_id],
+			foreignColumns: [organizations.id],
+			name: "activity_logs_organization_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
 			columns: [table.project_id],
 			foreignColumns: [projects.id],
 			name: "activity_logs_project_id_fkey"
 		}).onDelete("cascade"),
+	index("activity_logs_organization_id_created_at_idx").on(table.organization_id, table.created_at),
 	foreignKey({
 			columns: [table.member_id],
 			foreignColumns: [members.id],
@@ -604,4 +615,38 @@ export const meeting_participants = pgTable("meeting_participants", {
 		}).onDelete("cascade"),
 	primaryKey({ columns: [table.meeting_id, table.member_id], name: "meeting_participants_pkey"}),
 	index("meeting_participants_member_id_idx").on(table.member_id),
+]);
+
+// Project checkpoints. "Achieved" milestones are the project's recorded achievements.
+export const milestones = pgTable("milestones", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	project_id: uuid().notNull(),
+	// Optional link to the roadmap phase the milestone closes
+	roadmap_id: uuid(),
+	title: text().notNull(),
+	description: text(),
+	due_date: date(),
+	status: text().default('Planned').notNull(),
+	achieved_at: timestamp({ withTimezone: true, mode: 'date' }),
+	created_by: uuid(),
+	created_at: timestamp({ withTimezone: true, mode: 'date' }).defaultNow(),
+	updated_at: timestamp({ withTimezone: true, mode: 'date' }).defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+	foreignKey({
+			columns: [table.project_id],
+			foreignColumns: [projects.id],
+			name: "milestones_project_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.roadmap_id],
+			foreignColumns: [roadmaps.id],
+			name: "milestones_roadmap_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.created_by],
+			foreignColumns: [members.id],
+			name: "milestones_created_by_fkey"
+		}).onDelete("set null"),
+	check("milestones_status_check", sql`status = ANY (ARRAY['Planned'::text, 'In Progress'::text, 'Achieved'::text, 'Missed'::text])`),
+	index("milestones_project_id_due_date_idx").on(table.project_id, table.due_date),
 ]);

@@ -7,6 +7,8 @@ import { signOut } from '@/auth';
 import { requireApiUser } from '@/lib/auth/session';
 import { getMember } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
+import { logActivity } from '@/lib/activity.server';
+import { isValidTimezone } from '@/lib/timezone';
 
 const updateOrgSchema = z.object({
   name: z.string().min(1).optional(),
@@ -14,7 +16,10 @@ const updateOrgSchema = z.object({
   industry: z.string().optional(),
   website: z.string().url().optional().or(z.literal('')),
   country: z.string().optional(),
-  timezone: z.string().optional(),
+  timezone: z
+    .string()
+    .refine((tz) => tz === '' || isValidTimezone(tz), 'Use a timezone name such as Africa/Nairobi or Europe/London')
+    .optional(),
   logo_url: z.string().url().optional().or(z.literal('')),
 });
 
@@ -51,7 +56,7 @@ export async function PATCH(request: Request) {
 
     const result = updateOrgSchema.safeParse(await request.json());
     if (!result.success) {
-      return NextResponse.json({ error: result.error.issues }, { status: 400 });
+      return NextResponse.json({ error: result.error.issues[0]?.message || 'Invalid payload', details: result.error.issues }, { status: 400 });
     }
 
     const [updatedOrg] = await db
@@ -59,6 +64,15 @@ export async function PATCH(request: Request) {
       .set(result.data)
       .where(eq(organizations.id, member.organization_id))
       .returning();
+
+    await logActivity({
+      organizationId: member.organization_id,
+      memberId: user.id,
+      action: 'Updated',
+      entityType: 'Organization',
+      entityId: member.organization_id,
+      description: `Updated organization settings (${Object.keys(result.data).join(', ')})`,
+    });
 
     return NextResponse.json(updatedOrg);
   } catch (err) {

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { features, modules, releases, roadmaps } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { getProjectAccess } from '@/lib/db/queries';
+import { canManageProject, getProjectAccess } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
 
 const assignFeaturesSchema = z.object({
@@ -51,8 +51,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { user, response } = await requireApiUser();
     if (response) return response;
 
-    if (!(await getProjectAccess(user.id, projectId)).hasAccess) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProject(await getProjectAccess(user.id, projectId))) {
+      return NextResponse.json({ error: 'Only Project Managers and Admins can change release scope' }, { status: 403 });
     }
 
     const result = assignFeaturesSchema.safeParse(await req.json());

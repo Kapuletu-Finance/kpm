@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { project_documents } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { getProjectAccess } from '@/lib/db/queries';
+import { canManageProject, getProjectAccess } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
 import { deleteFromCloudinary } from '@/lib/cloudinary';
 
@@ -17,11 +17,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ p
 
     const [access, [doc]] = await Promise.all([
       getProjectAccess(user.id, projectId),
-      db.select({ cloudinary_url: project_documents.cloudinary_url }).from(project_documents).where(documentInProject).limit(1),
+      db.select({ cloudinary_url: project_documents.cloudinary_url, uploaded_by: project_documents.uploaded_by }).from(project_documents).where(documentInProject).limit(1),
     ]);
 
     if (!access.hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+
+    // The uploader, or a manager, may delete
+    if (doc.uploaded_by !== user.id && !canManageProject(access)) {
+      return NextResponse.json({ error: 'Only the uploader or a project manager can delete this document' }, { status: 403 });
+    }
 
     // Best effort: remove the file from Cloudinary (public_id is the path after the version segment)
     try {

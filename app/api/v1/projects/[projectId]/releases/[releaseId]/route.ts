@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { features, releases } from '@/lib/db/schema';
 import { requireApiUser } from '@/lib/auth/session';
-import { getProjectAccess } from '@/lib/db/queries';
+import { canManageProject, getProjectAccess } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
+import { logActivity } from '@/lib/activity.server';
 
 const releaseUpdateSchema = z.object({
+  version: z.string().min(1).optional(),
   title: z.string().optional(),
   release_notes: z.string().optional(),
   deployment_checklist: z.array(z.any()).optional(),
@@ -51,8 +53,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const { user, response } = await requireApiUser();
     if (response) return response;
 
-    if (!(await getProjectAccess(user.id, projectId)).hasAccess) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProject(await getProjectAccess(user.id, projectId))) {
+      return NextResponse.json({ error: 'Only Project Managers and Admins can update releases' }, { status: 403 });
     }
 
     const result = releaseUpdateSchema.safeParse(await req.json());
@@ -60,15 +62,81 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: result.error.issues[0]?.message || 'Validation error' }, { status: 400 });
     }
 
-    const [release] = await db
-      .update(releases)
-      .set(result.data)
+    const [previous] = await db
+      .select({ status: releases.status })
+      .from(releases)
       .where(releaseInProject(releaseId, projectId))
-      .returning();
+      .limit(1);
+    if (!previous) return NextResponse.json({ error: 'Release not found' }, { status: 404 });
 
-    if (!release) return NextResponse.json({ error: 'Release not found' }, { status: 404 });
+    const shipping = result.data.status === 'Released' && previous.status !== 'Released';
+
+    const release = await db.transaction(async (tx) => {
+      const [release] = await tx
+        .update(releases)
+        .set({
+          ...result.data,
+          // Default the release date to the day it shipped
+          ...(shipping && !result.data.release_date && { release_date: new Date().toISOString().slice(0, 10) }),
+        })
+        .where(releaseInProject(releaseId, projectId))
+        .returning();
+
+      // Shipping a release ships the features in it
+      if (shipping) {
+        await tx
+          .update(features)
+          .set({ status: 'Released', completed_at: new Date() })
+          .where(and(eq(features.release_id, releaseId), ne(features.status, 'Released')));
+      }
+      return release;
+    });
+
+    if (result.data.status && result.data.status !== previous.status) {
+      await logActivity({
+        projectId,
+        memberId: user.id,
+        action: 'Updated',
+        entityType: 'Release',
+        entityId: releaseId,
+        description: `Moved release ${release.version} to ${release.status}`,
+      });
+    }
+
     return NextResponse.json(release);
   } catch (error) {
     return handleRouteError(error, 'Update release error');
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: Params) {
+  try {
+    const { projectId, releaseId } = await params;
+    const { user, response } = await requireApiUser();
+    if (response) return response;
+
+    if (!canManageProject(await getProjectAccess(user.id, projectId))) {
+      return NextResponse.json({ error: 'Only Project Managers and Admins can delete releases' }, { status: 403 });
+    }
+
+    // Features keep existing; their release_id is cleared by the foreign key (on delete set null)
+    const [deleted] = await db
+      .delete(releases)
+      .where(releaseInProject(releaseId, projectId))
+      .returning({ id: releases.id, version: releases.version });
+    if (!deleted) return NextResponse.json({ error: 'Release not found' }, { status: 404 });
+
+    await logActivity({
+      projectId,
+      memberId: user.id,
+      action: 'Deleted',
+      entityType: 'Release',
+      entityId: releaseId,
+      description: `Deleted release ${deleted.version}`,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleRouteError(error, 'Delete release error');
   }
 }

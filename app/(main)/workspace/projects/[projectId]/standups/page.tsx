@@ -2,7 +2,7 @@
 
 import { use, useState, useMemo } from 'react';
 import { useAuth } from '@/store/AuthContext';
-import { useStandups, useSubmitStandup, useUpdateStandup } from '@/hooks/useStandups';
+import { useDeleteStandup, useStandups, useSubmitStandup, useUpdateStandup } from '@/hooks/useStandups';
 import { useProjectTeam } from '@/hooks/useProjectTeam';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { Send, AlertCircle, HelpCircle, User, MessageSquareReply } from 'lucide-react';
+import { Send, AlertCircle, HelpCircle, User, MessageSquareReply, Pencil, Trash2 } from 'lucide-react';
 
 export default function StandupsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = use(params);
@@ -22,6 +22,10 @@ export default function StandupsPage({ params }: { params: Promise<{ projectId: 
   
   const submitMutation = useSubmitStandup(projectId);
   const updateMutation = useUpdateStandup(projectId);
+  const deleteMutation = useDeleteStandup(projectId);
+
+  // Set while the author is editing today's update
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [yesterday, setYesterday] = useState('');
   const [today, setToday] = useState('');
@@ -38,14 +42,15 @@ export default function StandupsPage({ params }: { params: Promise<{ projectId: 
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-  // Check if current user already submitted today
-  const hasSubmittedToday = useMemo(() => {
-    if (!standups || !memberProfile) return false;
-    return standups.some(s => 
-      s.member_id === memberProfile.id && 
+  // The current user's standup for today, if any (the API also enforces one per day)
+  const myTodayStandup = useMemo(() => {
+    if (!standups || !memberProfile) return undefined;
+    return standups.find(s =>
+      s.member_id === memberProfile.id &&
       format(new Date(s.submitted_at), 'yyyy-MM-dd') === todayStr
     );
   }, [standups, memberProfile, todayStr]);
+  const hasSubmittedToday = !!myTodayStandup;
 
   if (isLoading) {
     return <div className="animate-pulse space-y-6">
@@ -65,15 +70,46 @@ export default function StandupsPage({ params }: { params: Promise<{ projectId: 
       return;
     }
     
+    const fields = { yesterday, today, blockers, risks, help_needed: helpNeeded };
     try {
-      await submitMutation.mutateAsync({
-        yesterday, today, blockers, risks, help_needed: helpNeeded
-      });
-      toast.success('Standup submitted successfully!');
+      if (editingId) {
+        await updateMutation.mutateAsync({ standupId: editingId, data: fields });
+        toast.success('Standup updated');
+        setEditingId(null);
+      } else {
+        await submitMutation.mutateAsync(fields);
+        toast.success('Standup submitted successfully!');
+      }
       // Reset form
       setYesterday(''); setToday(''); setBlockers(''); setRisks(''); setHelpNeeded('');
-    } catch (error) {
-      toast.error('Failed to submit standup');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to submit standup');
+    }
+  };
+
+  const startEditing = () => {
+    if (!myTodayStandup) return;
+    setYesterday(myTodayStandup.yesterday || '');
+    setToday(myTodayStandup.today || '');
+    setBlockers(myTodayStandup.blockers || '');
+    setRisks(myTodayStandup.risks || '');
+    setHelpNeeded(myTodayStandup.help_needed || '');
+    setEditingId(myTodayStandup.id);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setYesterday(''); setToday(''); setBlockers(''); setRisks(''); setHelpNeeded('');
+  };
+
+  const handleDelete = async (standupId: string) => {
+    if (!window.confirm('Delete this standup? This cannot be undone.')) return;
+    try {
+      await deleteMutation.mutateAsync(standupId);
+      if (editingId === standupId) cancelEditing();
+      toast.success('Standup deleted');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete standup');
     }
   };
 
@@ -84,8 +120,8 @@ export default function StandupsPage({ params }: { params: Promise<{ projectId: 
       toast.success('Reply posted!');
       setReplyingTo(null);
       setReplyText('');
-    } catch (error) {
-      toast.error('Failed to post reply');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to post reply');
     }
   };
 
@@ -105,7 +141,7 @@ export default function StandupsPage({ params }: { params: Promise<{ projectId: 
           </h2>
         </div>
 
-        {hasSubmittedToday ? (
+        {hasSubmittedToday && !editingId ? (
           <div className="p-8 text-center flex flex-col items-center">
             <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center mb-4">
               <CheckCircle2Icon className="w-6 h-6 text-success" />
@@ -114,6 +150,9 @@ export default function StandupsPage({ params }: { params: Promise<{ projectId: 
             <p className="text-muted-foreground mt-2 max-w-sm">
               You have already submitted your standup for today. Check out what the rest of the team is working on below.
             </p>
+            <Button variant="outline" size="sm" className="mt-4" onClick={startEditing}>
+              <Pencil className="w-4 h-4 mr-2" /> Edit today&apos;s update
+            </Button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-4 space-y-4">
@@ -174,9 +213,14 @@ export default function StandupsPage({ params }: { params: Promise<{ projectId: 
               </div>
             </div>
             
-            <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={submitMutation.isPending} className="w-full md:w-auto">
-                {submitMutation.isPending ? 'Submitting...' : <><Send className="w-4 h-4 mr-2" /> Submit Standup</>}
+            <div className="flex justify-end gap-2 pt-2">
+              {editingId && (
+                <Button type="button" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+              )}
+              <Button type="submit" disabled={submitMutation.isPending || updateMutation.isPending} className="w-full md:w-auto">
+                {submitMutation.isPending || updateMutation.isPending
+                  ? 'Saving...'
+                  : <><Send className="w-4 h-4 mr-2" /> {editingId ? 'Save Changes' : 'Submit Standup'}</>}
               </Button>
             </div>
           </form>
@@ -216,9 +260,24 @@ export default function StandupsPage({ params }: { params: Promise<{ projectId: 
                       </p>
                     </div>
                   </div>
-                  {standup.sprints?.name && (
-                    <Badge variant="outline" className="text-xs bg-primary/5">{standup.sprints.name}</Badge>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {standup.sprints?.name && (
+                      <Badge variant="outline" className="text-xs bg-primary/5">{standup.sprints.name}</Badge>
+                    )}
+                    {(standup.member_id === memberProfile?.id || canReply) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDelete(standup.id)}
+                        disabled={deleteMutation.isPending}
+                        title="Delete standup"
+                        aria-label="Delete standup"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">

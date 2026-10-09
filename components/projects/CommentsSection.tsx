@@ -111,7 +111,7 @@ export function CommentsSection({ projectId, entityType, entityId, canManage }: 
                     </Avatar>
                     <div className="flex-1 space-y-2">
                       <Textarea 
-                        placeholder="Write a reply..." 
+                        placeholder="Write a reply... (@name to mention)" 
                         value={replyText} 
                         onChange={e => setReplyText(e.target.value)}
                         className="min-h-[80px] text-sm"
@@ -140,7 +140,7 @@ export function CommentsSection({ projectId, entityType, entityId, canManage }: 
           </Avatar>
           <div className="flex-1 space-y-2">
             <Textarea 
-              placeholder="Start a new discussion..." 
+              placeholder="Start a new discussion... (use @name to notify a teammate)" 
               value={newComment} 
               onChange={e => setNewComment(e.target.value)}
               className="min-h-[100px]"

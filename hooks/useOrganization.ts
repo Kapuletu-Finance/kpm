@@ -33,12 +33,37 @@ export function useRemoveMember() {
   
   return useMutation({
     mutationFn: async (memberId: string) => {
-      const response = await fetch(`/api/v1/organization/members?id=${memberId}`, {
+      const response = await fetch(`/api/v1/organization/members/${memberId}`, {
         method: 'DELETE',
       });
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to remove member');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization', 'members'] });
+    },
+  });
+}
+
+export function useUpdateMember() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ memberId, data }: {
+      memberId: string;
+      data: { organization_role?: string; status?: 'Active' | 'Inactive'; job_title?: string };
+    }) => {
+      const response = await fetch(`/api/v1/organization/members/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to update member');
       }
       return response.json();
     },

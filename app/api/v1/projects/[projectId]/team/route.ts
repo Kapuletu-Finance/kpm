@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { members, project_members } from '@/lib/db/schema';
+import { members, project_members, projects } from '@/lib/db/schema';
+import { logActivity } from '@/lib/activity.server';
 import { requireApiUser } from '@/lib/auth/session';
 import { InviteError, inviteMember } from '@/lib/auth/invite.server';
-import { canManageProject, getMemberWithOrgName, getProjectAccess, getProjectMembership } from '@/lib/db/queries';
+import { canManageProject, getMemberWithOrgName, getProjectAccess, getProjectMembership, memberInProjectOrg } from '@/lib/db/queries';
 import { handleRouteError } from '@/lib/api/http';
 
 const addMemberSchema = z.object({
@@ -131,6 +132,11 @@ export async function POST(
       return NextResponse.json({ error: 'Could not determine target member' }, { status: 400 });
     }
 
+    // Only people from this project's organization can join its team
+    if (!(await memberInProjectOrg(targetMemberId, projectId))) {
+      return NextResponse.json({ error: 'Member not found in your organization' }, { status: 404 });
+    }
+
     if (await getProjectMembership(projectId, targetMemberId)) {
       return NextResponse.json({ error: 'Member is already in this project' }, { status: 400 });
     }
@@ -146,6 +152,23 @@ export async function POST(
         review_authority,
       })
       .returning();
+
+    // A project left without a lead (e.g. its PM was removed) gets the new PM
+    if (project_role === 'Project Manager') {
+      await db
+        .update(projects)
+        .set({ project_manager_id: targetMemberId })
+        .where(and(eq(projects.id, projectId), isNull(projects.project_manager_id)));
+    }
+
+    await logActivity({
+      projectId,
+      memberId: user.id,
+      action: 'Added',
+      entityType: 'TeamMember',
+      entityId: targetMemberId,
+      description: `Added a team member as ${project_role}`,
+    });
 
     return NextResponse.json({
       message: 'Team member added successfully',

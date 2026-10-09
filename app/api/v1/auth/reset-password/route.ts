@@ -6,7 +6,9 @@ import { members, users } from '@/lib/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { consumeToken } from '@/lib/auth/tokens';
 import { clientIp, hitRateLimits, tooManyRequests } from '@/lib/auth/rate-limit';
-import { getSessionUser } from '@/lib/auth/session';
+import { getVerifiedSession } from '@/lib/auth/session';
+import { revokeSessions } from '@/lib/auth/status';
+import { signIn } from '@/auth';
 
 const resetPasswordSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
     if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
 
     let where;
+    const signedIn = !token;
     if (token) {
       const email = await consumeToken('reset', token);
       if (!email) {
@@ -41,7 +44,7 @@ export async function POST(request: Request) {
       }
       where = eq(users.email, email);
     } else {
-      const sessionUser = await getSessionUser();
+      const { user: sessionUser } = await getVerifiedSession();
       if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       where = eq(users.id, sessionUser.id);
     }
@@ -54,6 +57,13 @@ export async function POST(request: Request) {
       .returning({ id: users.id, email: users.email });
 
     if (!user) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+
+    // A new password signs out every existing session (a stolen session stops working)...
+    await revokeSessions(user.id);
+    // ...except this one: someone changing their password while signed in gets a fresh session.
+    if (signedIn && user.email) {
+      await signIn('credentials', { email: user.email, password, redirect: false });
+    }
 
     // An invitee who resets instead of accepting is activated the same way.
     await db

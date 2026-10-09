@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, Users, Activity } from 'lucide-react';
+import { Building2, Users, Activity, ClipboardCheck, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/store/AuthContext';
 
 export default function OrganizationLayout({
@@ -13,13 +13,19 @@ export default function OrganizationLayout({
   const pathname = usePathname();
   const { memberProfile } = useAuth();
   const isOrgAdmin = memberProfile?.organization_role === 'Organization Admin';
+  // Oversight tabs: admins see the whole org, Project Managers the projects they manage
+  const canOversee = isOrgAdmin || memberProfile?.organization_role === 'Project Manager';
 
   const tabs = [
-    { name: 'Members', href: '/workspace/organization', icon: Users, exact: true },
+    { name: isOrgAdmin ? 'Members' : 'Directory', href: '/workspace/organization', icon: Users, exact: true },
   ];
 
+  if (canOversee) {
+    tabs.push({ name: 'Daily Standups', href: '/workspace/organization/standups', icon: ClipboardCheck, exact: false });
+    tabs.push({ name: 'Reports', href: '/workspace/organization/reports', icon: BarChart3, exact: false });
+  }
   if (isOrgAdmin) {
-    tabs.push({ name: 'Recent Activities', href: '/workspace/organization/activity', icon: Activity, exact: false });
+    tabs.push({ name: 'Audit Trail', href: '/workspace/organization/activity', icon: Activity, exact: false });
   }
 
   return (
@@ -31,7 +37,7 @@ export default function OrganizationLayout({
         </h1>
         <p className="text-muted-foreground mt-2">
           {isOrgAdmin 
-            ? 'Manage your workspace members and view organization-wide recent activities.'
+            ? 'Manage members, follow daily submissions, and report on everything happening across the organization.'
             : 'View team members and your colleagues across the workspace.'}
         </p>
       </div>
