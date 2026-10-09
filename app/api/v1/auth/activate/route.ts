@@ -6,6 +6,7 @@ import { members, users } from '@/lib/db/schema';
 import { signIn } from '@/auth';
 import { hashPassword } from '@/lib/auth/password';
 import { consumeToken, peekToken } from '@/lib/auth/tokens';
+import { clientIp, hitRateLimits, tooManyRequests } from '@/lib/auth/rate-limit';
 
 const activateSchema = z.object({
   token: z.string().min(1, 'Invitation token is required'),
@@ -24,6 +25,11 @@ export async function GET(request: Request) {
 // the member and signs them in.
 export async function POST(request: Request) {
   try {
+    const limit = await hitRateLimits([
+      { key: `activate:ip:${clientIp(request.headers)}`, limit: 20, windowSeconds: 15 * 60 },
+    ]);
+    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+
     const result = activateSchema.safeParse(await request.json());
     if (!result.success) {
       return NextResponse.json(

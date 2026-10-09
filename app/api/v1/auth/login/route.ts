@@ -30,7 +30,14 @@ export async function POST(request: Request) {
       await signIn('credentials', { email, password, redirect: false });
     } catch (error) {
       if (error instanceof AuthError) {
-        if ((error as AuthError & { code?: string }).code === 'email_not_verified') {
+        const code = (error as AuthError & { code?: string }).code;
+        if (code === 'rate_limited') {
+          return NextResponse.json(
+            { error: 'Too many login attempts. Please wait 15 minutes and try again.' },
+            { status: 429, headers: { 'Retry-After': '900' } }
+          );
+        }
+        if (code === 'email_not_verified') {
           return NextResponse.json(
             { error: 'Email not confirmed', requireVerification: true },
             { status: 403 }

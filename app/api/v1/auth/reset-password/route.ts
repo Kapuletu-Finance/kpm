@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { members, users } from '@/lib/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { consumeToken } from '@/lib/auth/tokens';
+import { clientIp, hitRateLimits, tooManyRequests } from '@/lib/auth/rate-limit';
 import { getSessionUser } from '@/lib/auth/session';
 
 const resetPasswordSchema = z.object({
@@ -26,6 +27,11 @@ export async function POST(request: Request) {
     }
 
     const { password, token } = result.data;
+
+    const limit = await hitRateLimits([
+      { key: `reset:ip:${clientIp(request.headers)}`, limit: 20, windowSeconds: 15 * 60 },
+    ]);
+    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
 
     let where;
     if (token) {

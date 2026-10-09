@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { issueToken } from '@/lib/auth/tokens';
+import { clientIp, hitRateLimits, tooManyRequests } from '@/lib/auth/rate-limit';
 import { sendPasswordResetEmail } from '@/lib/email.server';
 
 const forgotPasswordSchema = z.object({
@@ -23,6 +24,14 @@ export async function POST(request: Request) {
     }
 
     const email = result.data.email.trim().toLowerCase();
+
+    // Stops inbox flooding and use as a mail relay
+    const limit = await hitRateLimits([
+      { key: `forgot:email:${email}`, limit: 3, windowSeconds: 60 * 60 },
+      { key: `forgot:ip:${clientIp(request.headers)}`, limit: 20, windowSeconds: 60 * 60 },
+    ]);
+    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+
     const [user] = await db
       .select({ id: users.id, passwordHash: users.passwordHash })
       .from(users)

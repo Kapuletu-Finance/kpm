@@ -68,7 +68,7 @@ services:
       - ./infra/pgbouncer/tls:/etc/pgbouncer/tls:ro
     networks: [db]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U kpm -d kpm"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -104,6 +104,8 @@ services:
       NEXT_PUBLIC_APP_URL: https://${APP_DOMAIN:-localhost}
       AUTH_SECRET: ${AUTH_SECRET:-} # Auth.js refuses to start without it
       AUTH_TRUST_HOST: "true" # behind Caddy
+      # Public origin for URLs Auth.js builds (otherwise it sees the container's 0.0.0.0:3000)
+      AUTH_URL: https://${APP_DOMAIN:-localhost}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
       NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:-}

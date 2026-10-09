@@ -80,3 +80,11 @@ export const verificationTokens = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+
+// Fixed-window counters for brute-force protection (lib/auth/rate-limit.ts).
+// Postgres-backed so limits hold across serverless instances and restarts.
+export const rateLimits = pgTable('rate_limits', {
+  key: text('key').primaryKey(),
+  count: integer('count').notNull(),
+  resetAt: timestamp('reset_at', { mode: 'date', withTimezone: true }).notNull(),
+});

@@ -113,6 +113,28 @@ password is the protection). Never open 5432.
    Resend), because Supabase invite links stop working.
 4. Point the app at the new database and stop writes to Supabase.
 
+## Authentication and security
+
+- Sessions are encrypted JWT cookies (`__Secure-authjs.session-token` over HTTPS: Secure,
+  HttpOnly, SameSite=Lax), valid 30 days from sign-in. Signing out deletes the cookie.
+  Rotating `AUTH_SECRET` signs everyone out.
+- A JWT stays valid until it expires, so removing a member or resetting a password does not end
+  sessions that are already open. The API still denies a removed member, because every route
+  checks membership.
+- Brute-force limits (Postgres-backed, shared by all instances), table `rate_limits`:
+
+  | Action | Limit |
+  |---|---|
+  | Sign-in | 10 failures per email and 50 per IP per 15 minutes |
+  | Forgot password | 3 per email and 20 per IP per hour |
+  | Sign-up | 10 per IP per hour |
+  | Accept invite / reset password | 20 per IP per 15 minutes |
+
+- Email links (verify 24h, invite 7d, reset 1h) are single-use; only their SHA-256 is stored.
+- Caddy adds HSTS, `X-Frame-Options: DENY`, `nosniff` and a strict referrer policy.
+- `AUTH_URL` must be the public `https://` origin when the app runs behind Caddy (compose sets it
+  from `APP_DOMAIN`). Vercel detects it automatically.
+
 ## Backups
 
 ```bash

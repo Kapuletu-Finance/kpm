@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { members, organizations, users } from '@/lib/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { issueToken } from '@/lib/auth/tokens';
+import { clientIp, hitRateLimits, tooManyRequests } from '@/lib/auth/rate-limit';
 import { sendVerificationEmail } from '@/lib/email.server';
 
 const signupSchema = z.object({
@@ -28,6 +29,11 @@ export async function POST(request: Request) {
 
     const { password, fullName, organizationName } = result.data;
     const email = result.data.email.trim().toLowerCase();
+
+    const limit = await hitRateLimits([
+      { key: `signup:ip:${clientIp(request.headers)}`, limit: 10, windowSeconds: 60 * 60 },
+    ]);
+    if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
 
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existing) {

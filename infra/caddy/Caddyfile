@@ -1,6 +1,18 @@
 # HTTPS for the app. Caddy obtains and renews a Let's Encrypt certificate for
 # APP_DOMAIN automatically (DNS must point at the VPS, ports 80/443 open).
+# Caddy replaces any client-sent X-Forwarded-For with the real client IP,
+# which the app's rate limiting relies on.
 {$APP_DOMAIN} {
 	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
 	reverse_proxy app:3000
 }
