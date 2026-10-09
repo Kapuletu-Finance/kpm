@@ -7,7 +7,8 @@ import { GeneralSettingsForm } from '@/components/organization/settings/GeneralS
 import { StandardsForm } from '@/components/organization/settings/StandardsForm';
 import { PersonalProfileForm } from '@/components/organization/settings/PersonalProfileForm';
 import { DangerZone } from '@/components/organization/settings/DangerZone';
-import { Settings, ShieldCheck, UserCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { DocumentBrandingForm } from '@/components/organization/settings/DocumentBrandingForm';
+import { Settings, ShieldCheck, UserCircle2, AlertTriangle, Loader2, FileText } from 'lucide-react';
 
 export default function WorkspaceSettingsPage() {
   const { memberProfile } = useAuth();
@@ -34,7 +35,7 @@ export default function WorkspaceSettingsPage() {
       </div>
 
       <Tabs defaultValue="personal" className="w-full space-y-6">
-        <TabsList className={`bg-muted border border-border/50 grid w-full ${isOrgAdmin ? 'grid-cols-4' : 'grid-cols-1'} md:w-fit md:flex`}>
+        <TabsList className={`bg-muted border border-border/50 grid w-full ${isOrgAdmin ? 'grid-cols-5' : 'grid-cols-1'} md:w-fit md:flex`}>
           <TabsTrigger value="personal" className="flex items-center gap-2">
             <UserCircle2 className="w-4 h-4" />
             <span className="hidden sm:inline">Personal Profile</span>
@@ -45,6 +46,10 @@ export default function WorkspaceSettingsPage() {
               <TabsTrigger value="general" className="flex items-center gap-2">
                 <Settings className="w-4 h-4" />
                 <span className="hidden sm:inline">Organization Profile</span>
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Documents &amp; Branding</span>
               </TabsTrigger>
               <TabsTrigger value="standards" className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4" />
@@ -66,6 +71,10 @@ export default function WorkspaceSettingsPage() {
           <>
             <TabsContent value="general" className="m-0 outline-none">
               <GeneralSettingsForm organization={organization} />
+            </TabsContent>
+
+            <TabsContent value="documents" className="m-0 outline-none">
+              <DocumentBrandingForm />
             </TabsContent>
 
             <TabsContent value="standards" className="m-0 outline-none">

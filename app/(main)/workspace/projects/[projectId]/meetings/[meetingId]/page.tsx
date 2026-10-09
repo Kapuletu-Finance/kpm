@@ -11,6 +11,7 @@ import { MeetingParticipants } from '@/components/projects/MeetingParticipants';
 import { CommentsSection } from '@/components/projects/CommentsSection';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { DownloadDocumentButton } from '@/components/documents/DownloadDocumentButton';
 import { ArrowLeft, Calendar, Clock, Video, FileText, CheckSquare, Save, Loader2, Trash2, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -90,6 +91,8 @@ export default function MeetingWorkspacePage({ params }: { params: Promise<{ pro
             )}
           </div>
         </div>
+        {/* Official minutes reflect what is saved, so save notes first */}
+        <DownloadDocumentButton type="meeting-minutes" params={{ projectId, meetingId }} label="Official minutes (PDF)" />
         {canManage && (
           <Button variant="destructive" size="sm" onClick={handleDelete}>
             <Trash2 className="w-4 h-4 mr-2" /> Delete

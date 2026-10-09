@@ -7,6 +7,7 @@ import { AlertCircle, ArrowLeft, ExternalLink, Loader2, Mail } from 'lucide-reac
 import { useMemberOverview } from '@/hooks/useInsights';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { DownloadDocumentButton } from '@/components/documents/DownloadDocumentButton';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const RANGES = [
@@ -90,6 +91,7 @@ export default function MemberOverviewPage({ params }: { params: Promise<{ membe
         </div>
         <div className="ml-auto flex items-center gap-2">
           {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" aria-label="Loading" />}
+          <DownloadDocumentButton type="member-report" params={{ memberId, ...range }} label="Activity report (PDF)" />
           <div className="flex rounded-md border overflow-hidden" role="group" aria-label="Period">
             {RANGES.map((r) => (
               <button

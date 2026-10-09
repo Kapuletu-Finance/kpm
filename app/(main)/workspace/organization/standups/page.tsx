@@ -9,6 +9,7 @@ import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DownloadDocumentButton } from '@/components/documents/DownloadDocumentButton';
 
 const shift = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 864e5).toISOString().slice(0, 10);
 
@@ -50,6 +51,7 @@ export default function OrganizationStandupsPage() {
           </Button>
           {date && <Button variant="ghost" size="sm" onClick={() => setDate(undefined)}>Today</Button>}
           {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" aria-label="Loading" />}
+          <DownloadDocumentButton type="standup-digest" params={{ date: current }} label="Digest (PDF)" />
         </div>
       </div>
 

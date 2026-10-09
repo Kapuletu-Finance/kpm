@@ -650,3 +650,36 @@ export const milestones = pgTable("milestones", {
 	check("milestones_status_check", sql`status = ANY (ARRAY['Planned'::text, 'In Progress'::text, 'Achieved'::text, 'Missed'::text])`),
 	index("milestones_project_id_due_date_idx").on(table.project_id, table.due_date),
 ]);
+
+// How an organization's official documents (PDF reports, minutes, ...) are branded.
+// With `enabled` false, documents carry the default KPM - Kapuletu Systems letterhead.
+export const organization_branding = pgTable("organization_branding", {
+	organization_id: uuid().primaryKey().notNull(),
+	enabled: boolean().default(false).notNull(),
+	// Name printed on the letterhead; falls back to the organization name
+	display_name: text(),
+	tagline: text(),
+	// PNG or JPEG uploaded through KPM (documents only embed images from our storage)
+	logo_url: text(),
+	contact_email: text(),
+	contact_phone: text(),
+	address: text(),
+	website: text(),
+	// e.g. company registration number or tax PIN
+	registration_number: text(),
+	primary_color: text().default('#097255').notNull(),
+	template: text().default('classic').notNull(),
+	footer_text: text(),
+	confidentiality_notice: text(),
+	show_kpm_attribution: boolean().default(true).notNull(),
+	created_at: timestamp({ withTimezone: true, mode: 'date' }).defaultNow(),
+	updated_at: timestamp({ withTimezone: true, mode: 'date' }).defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+	foreignKey({
+			columns: [table.organization_id],
+			foreignColumns: [organizations.id],
+			name: "organization_branding_organization_id_fkey"
+		}).onDelete("cascade"),
+	check("organization_branding_template_check", sql`template = ANY (ARRAY['classic'::text, 'modern'::text, 'minimal'::text])`),
+	check("organization_branding_color_check", sql`primary_color ~ '^#[0-9a-fA-F]{6}$'`),
+]);

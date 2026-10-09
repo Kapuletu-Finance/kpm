@@ -12,6 +12,7 @@ import { BurndownChart, VelocityChart } from '@/components/charts/SprintCharts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { DownloadDocumentButton } from '@/components/documents/DownloadDocumentButton';
 
 const RETRO_FIELDS: { key: keyof Retrospective; label: string; hint: string }[] = [
   { key: 'what_went_well', label: 'What went well', hint: 'Wins worth repeating' },
@@ -76,11 +77,14 @@ export default function SprintInsightsPage({ params }: { params: Promise<{ proje
           <h1 className="text-2xl font-bold tracking-tight">{sprint.name} insights</h1>
           <Badge variant={isCompleted ? 'default' : 'outline'}>{sprint.status}</Badge>
           <span className="text-sm text-muted-foreground">{dates(sprint.start_date)} – {dates(sprint.end_date)}</span>
-          {!isCompleted && (
-            <Link href={`/workspace/projects/${projectId}/sprints/${sprintId}/board`} className="text-sm text-primary hover:underline ml-auto">
-              Open board
-            </Link>
-          )}
+          <div className="ml-auto flex items-center gap-3">
+            {!isCompleted && (
+              <Link href={`/workspace/projects/${projectId}/sprints/${sprintId}/board`} className="text-sm text-primary hover:underline">
+                Open board
+              </Link>
+            )}
+            <DownloadDocumentButton type="sprint-report" params={{ projectId, sprintId }} label="Sprint report (PDF)" />
+          </div>
         </div>
         {sprint.goal && <p className="text-muted-foreground mt-2 max-w-3xl"><Flag className="w-4 h-4 inline mr-1.5 -mt-0.5" />{sprint.goal}</p>}
       </div>

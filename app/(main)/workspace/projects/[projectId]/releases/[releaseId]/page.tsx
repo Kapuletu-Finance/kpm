@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ArrowLeft, Rocket, Save, Plus, X, Loader2, CheckCircle2, Circle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { DownloadDocumentButton } from '@/components/documents/DownloadDocumentButton';
 
 export default function ReleaseDetailPage({ params }: { params: Promise<{ projectId: string, releaseId: string }> }) {
   const { projectId, releaseId } = use(params);
@@ -123,6 +124,7 @@ export default function ReleaseDetailPage({ params }: { params: Promise<{ projec
             {release.title && <Badge variant="secondary" className="text-sm font-normal">{release.title}</Badge>}
           </div>
         </div>
+        <DownloadDocumentButton type="release-notes" params={{ projectId, releaseId }} label="Release notes (PDF)" />
         {canManage && (
           <div className="flex items-center gap-3">
             <Select value={status} onValueChange={(val: string | null) => val && setStatus(val)}>

@@ -6,6 +6,7 @@ import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { Download, Trophy, Rocket, Flag, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { reportCsvUrl, useReport, type Report } from '@/hooks/useInsights';
 import { Badge } from '@/components/ui/badge';
+import { DownloadDocumentButton } from '@/components/documents/DownloadDocumentButton';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const daysAgo = (n: number) => iso(new Date(Date.now() - n * 864e5));
@@ -95,8 +96,16 @@ export function ReportView({ projectId, showPeopleLinks = true }: { projectId?: 
             className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground" />
         </label>
         {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground mb-2.5" aria-label="Loading" />}
-        {report && <span className="text-xs text-muted-foreground mb-2.5 ml-auto">Days measured in {report.range.timezone}</span>}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {projectScoped ? (
+            <DownloadDocumentButton type="project-status" params={{ projectId, ...range }} label="Status report (PDF)" />
+          ) : (
+            <DownloadDocumentButton type="portfolio" params={range} label="Portfolio report (PDF)" />
+          )}
+          <DownloadDocumentButton type="team-performance" params={{ projectId, ...range }} label="Team report (PDF)" />
+        </div>
       </div>
+      {report && <p className="text-xs text-muted-foreground -mt-3">Days are measured in {report.range.timezone}. PDFs carry your organization&apos;s official letterhead.</p>}
 
       {error && <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-sm">{(error as Error).message}</div>}
       {isLoading && <div className="h-64 bg-muted/40 rounded-xl animate-pulse" />}

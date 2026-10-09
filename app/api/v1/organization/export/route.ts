@@ -37,6 +37,7 @@ export async function GET() {
     const tables: Record<string, SQL> = {
       organization: sql`select * from organizations where id = ${org}::uuid`,
       organization_standards: sql`select * from organization_standards where organization_id = ${org}::uuid`,
+      organization_branding: sql`select * from organization_branding where organization_id = ${org}::uuid`,
       members: sql`select * from members where organization_id = ${org}::uuid`,
       projects: sql`select * from projects where organization_id = ${org}::uuid`,
       project_members: sql`select * from project_members where project_id in (${projectIds})`,
